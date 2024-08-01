@@ -1,0 +1,504 @@
+# kubernetes集群安装（第二次）
+
+## 虚拟机创建
+
+![image-20240604121341728](..\images\image-20240604121341728.png)
+
+![image-20240604121845610](..\images\image-20240604121845610.png)
+
+#### 修改虚拟机名字 & 存放虚拟机文件的目录
+
+![image-20240604125850689](..\images\image-20240604125850689.png)
+
+- 处理器两个
+- 内存2GB
+- NAT网络
+
+![image-20240604125953408](..\images\image-20240604125953408.png)
+
+#### 磁盘80GB & 保存为单个文件
+
+![image-20240604130106979](..\images\image-20240604130106979.png)
+
+![image-20240604130135950](..\images\image-20240604130135950.png)
+
+#### 选择镜像文件
+
+![image-20240604130224589](..\images\image-20240604130224589.png)
+
+
+
+## centos7安装
+
+直接打开虚拟机，进入如下页面
+
+按向上键，选择直接`Install CentOS7`（默认进来停在第二行，会耗时间检查镜像文件）
+
+**![image-20240604130332125](..\images\image-20240604130332125.png)**
+
+waiting...
+
+#### 选择语言
+
+![image-20240604130614255](..\images\image-20240604130614255.png)
+
+#### 修改时区
+
+因为上一步语言选的英语，所以时区默认是US，需要修改成中国上海
+
+#### 添加中文键盘布局 & 语言支持
+
+使得可以输入中文
+
+![image-20240604130953151](..\images\image-20240604130953151.png)
+
+#### 系统分盘
+
+默认自动分成一个盘就行 
+
+点进来再点`Done`
+
+![image-20240604131116654](..\images\image-20240604131116654.png)
+
+#### 配置静态网络 & 顺便修改hostname
+
+（也可以在安装好后改/etc/sysconfig/network-scripts/ifcfg-ens33）
+
+点`Configure`
+
+![image-20240604131354556](..\images\image-20240604131354556.png)
+
+![image-20240604131502271](..\images\image-20240604131502271.png)
+
+#### 开始安装 & 设置root密码 & 创建用户（如果需要的话）
+
+如果密码较弱的话需要点两次`Done`
+
+![image-20240604131717686](..\images\image-20240604131717686.png)
+
+waiting...
+
+安装完成后`reboot`
+
+
+
+## 初始系统环境设置
+
+```bash
+#!/bin/bash
+
+# 关闭防火墙
+systemctl stop firewalld
+systemctl disable firewalld
+
+# 关闭selinux
+sed -i 's/enforcing/disabled/' /etc/selinux/config  # 永久
+setenforce 0  # 临时
+
+# 关闭swap
+swapoff -a  # 临时
+sed -ri 's/.*swap.*/#&/' /etc/fstab    # 永久
+
+# 设置主机名
+########## 由于在安装操作系统的时候就设置了hostname所以这里不需要再设置 #########
+# hostnamectl set-hostname <hostname>
+
+# 在master添加hosts
+cat >> /etc/hosts << EOF
+192.168.18.60 k8s-master
+192.168.18.62 k8s-node01
+192.168.18.63 k8s-node02
+EOF
+
+
+# 将桥接的IPv4流量传递到iptables的链
+cat > /etc/sysctl.d/k8s.conf << EOF
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sysctl --system  
+
+
+# 时间同步
+yum install ntpdate -y
+ntpdate time.windows.com
+
+# 安装一些必要的软件
+yum install -y conntrack ntpdate ntp ipvsadm ipset jq iptables sysstat libseccmp wget net-tools git vim
+```
+
+#### 需要重启机器（使关闭swap的操作生效）
+
+
+
+## 安装docker（20.10.9版本）
+
+```bash
+#!/bin/bash
+
+# 安装所需的软件包
+yum install -y yum-utils
+
+# 设置docker的阿里云软件源（阿里源安装这个旧版本的docker会有个组件找不到）
+#yum-config-manager \
+#    --add-repo \
+#    https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+
+# 添加官方的docker源
+yum-config-manager     --add-repo     https://download.docker.com/linux/centos/docker-ce.repo
+yum makecache fast
+
+# 安装docker
+yum install -y docker-ce-20.10.9 docker-ce-cli-20.10.9 containerd.io
+
+# 启动docker & 设置docker为开机自启
+systemctl enable --now docker
+
+# 验证是否成功安装
+docker run hello-world
+
+# 设置docker的cgroup为systemd
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<EOF
+{
+	"exec-opts":["native.cgroupdriver=systemd"]
+}
+EOF
+systemctl daemon-reload && systemctl restart docker
+```
+
+
+
+## 安装kubernetes三件套
+
+```bash
+#!/bin/bash
+
+# 添加kubernetes的阿里源
+cat > /etc/yum.repos.d/kubernetes.repo << EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+EOF
+
+# 下载1.23.6的软件
+yum install -y kubelet-1.23.6 kubeadm-1.23.6 kubectl-1.23.6
+systemctl enable kubelet
+```
+
+
+
+## 初始化master
+
+```bash
+kubeadm init \
+      --apiserver-advertise-address=192.168.18.60 \
+      --image-repository registry.aliyuncs.com/google_containers \
+      --kubernetes-version v1.23.6 \
+      --service-cidr=10.96.0.0/12 \
+      --pod-network-cidr=10.244.0.0/16
+```
+
+
+
+## worker节点加入集群
+
+master在`kubeadm init`成功执行后，按照打印的提示信息让其他worker加入集群
+
+![image-20240604092611083](..\images\image-20240604092611083.png)
+
+
+
+## flannel网络配置（master）
+
+下载一个kube-flannel的配置文件：https://github.com/flannel-io/flannel/releases?page=1
+
+由于安装的kubernetes版本本来就比较旧，所以为了避免兼容问题，用的是22年的v0.20.2的一个kube-flannel.yml
+
+#### 需要修改两处
+
+- 在`- --kube-subnet-mgr`下面添加一行`- --iface=ens33`，指明flannel使用的通向外部的网卡
+- 确认`net-conf.json`下的`"Network": "10.244.0.0/16"`，flannel的子网网段，与`kubeadm init --pod-network-cidr=10.244.0.0/16`指定的k8s子网网段一致
+- （可选）修改几处镜像的地址，去掉`docker.io/`，得到`image: rancher/mirrored-flannelcni-flannel-cni-plugin:v1.1.0`（带上`docker.io/`就是从官方docker源拉取镜像，去掉就是从阿里源）
+
+#### 修改后的Kube-flannel.yml
+
+```yaml
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: kube-flannel
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flannel
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: flannel
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flannel
+subjects:
+- kind: ServiceAccount
+  name: flannel
+  namespace: kube-flannel
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flannel
+  namespace: kube-flannel
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kube-flannel-cfg
+  namespace: kube-flannel
+  labels:
+    tier: node
+    app: flannel
+data:
+  cni-conf.json: |
+    {
+      "name": "cbr0",
+      "cniVersion": "0.3.1",
+      "plugins": [
+        {
+          "type": "flannel",
+          "delegate": {
+            "hairpinMode": true,
+            "isDefaultGateway": true
+          }
+        },
+        {
+          "type": "portmap",
+          "capabilities": {
+            "portMappings": true
+          }
+        }
+      ]
+    }
+  net-conf.json: |
+    {
+      "Network": "10.244.0.0/16",
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-flannel-ds
+  namespace: kube-flannel
+  labels:
+    tier: node
+    app: flannel
+spec:
+  selector:
+    matchLabels:
+      app: flannel
+  template:
+    metadata:
+      labels:
+        tier: node
+        app: flannel
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                - linux
+      hostNetwork: true
+      priorityClassName: system-node-critical
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      serviceAccountName: flannel
+      initContainers:
+      - name: install-cni-plugin
+       #image: flannelcni/flannel-cni-plugin:v1.1.0 for ppc64le and mips64le (dockerhub limitations may apply)
+        image: rancher/mirrored-flannelcni-flannel-cni-plugin:v1.1.0
+        command:
+        - cp
+        args:
+        - -f
+        - /flannel
+        - /opt/cni/bin/flannel
+        volumeMounts:
+        - name: cni-plugin
+          mountPath: /opt/cni/bin
+      - name: install-cni
+       #image: flannelcni/flannel:v0.20.2 for ppc64le and mips64le (dockerhub limitations may apply)
+        image: rancher/mirrored-flannelcni-flannel:v0.20.2
+        command:
+        - cp
+        args:
+        - -f
+        - /etc/kube-flannel/cni-conf.json
+        - /etc/cni/net.d/10-flannel.conflist
+        volumeMounts:
+        - name: cni
+          mountPath: /etc/cni/net.d
+        - name: flannel-cfg
+          mountPath: /etc/kube-flannel/
+      containers:
+      - name: kube-flannel
+       #image: flannelcni/flannel:v0.20.2 for ppc64le and mips64le (dockerhub limitations may apply)
+        image: rancher/mirrored-flannelcni-flannel:v0.20.2
+        command:
+        - /opt/bin/flanneld
+        args:
+        - --ip-masq
+        - --kube-subnet-mgr
+        - --iface=ens33
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "50Mi"
+          limits:
+            cpu: "100m"
+            memory: "50Mi"
+        securityContext:
+          privileged: false
+          capabilities:
+            add: ["NET_ADMIN", "NET_RAW"]
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: EVENT_QUEUE_DEPTH
+          value: "5000"
+        volumeMounts:
+        - name: run
+          mountPath: /run/flannel
+        - name: flannel-cfg
+          mountPath: /etc/kube-flannel/
+        - name: xtables-lock
+          mountPath: /run/xtables.lock
+      volumes:
+      - name: run
+        hostPath:
+          path: /run/flannel
+      - name: cni-plugin
+        hostPath:
+          path: /opt/cni/bin
+      - name: cni
+        hostPath:
+          path: /etc/cni/net.d
+      - name: flannel-cfg
+        configMap:
+          name: kube-flannel-cfg
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+
+```
+
+#### 创建flannel网络
+
+```bash
+kubectl apply -f kube-flannel.yml
+```
+
+需要注意的是
+
+- 镜像的拉取会在后台进行，所以该命令执行完成后，查看pod和node状态依旧是NotReady，需要等一段时间
+
+- 配置成功后，flannel是在kube-flannel这个命名空间中（yml开头就写了），所以在kube-system命名空间中看不到flannel的pods（网上的教程我看的所有的flannel都是在kube-system中，结果部署完flannel发现kube-system下根本就没有flannel的pod在运行，以为配置出错了，搞了他妈半天，艹）
+
+- 只需要在master配置flannel，因为只要worker正常加入了集群，master中的kube-flannel会自动部署到两个worker节点上
+
+### 关于虚拟机重启后网络出问题的解决
+
+```bash
+#!/bin/bash
+
+# 删除flannel网络
+kubectl delete -f kube-flannel.yml
+
+# 删除flannel的网络的残留配置
+sudo ifconfig cni0 down
+sudo ip link delete cni0
+sudo ifconfig flannel.1 down
+sudo ip link delete flannel.1
+sudo rm -rf /var/lib/cni/flannel/*
+sudo rm -rf /var/lib/cni/networks/cbr0/*
+sudo rm -rf /var/lib/cni/cache/*
+sudo rm -f /etc/cni/net.d/*
+sudo systemctl restart kubelet
+sudo systemctl restart docker
+sudo chmod a+w /var/run/docker.sock
+
+# 再重新部署flannel网络
+kubectl apply -f kube-flannel.yml
+```
+
+
+
+
+
+## worker节点配置kubectl
+
+现在在worker上使用kubectl命令会发现报错：
+
+![image-20240612135829813](..\images\image-20240612135829813.png)
+
+这是因为worker还知道api server在哪，而有关api server的配置在master的`/etc/kubernetes/admin.conf`文件中，因此：
+
+1. 需要把该配置文件拷贝到worker中才可以在worker中使用kubectl
+
+```bash
+scp /etc/kubernetes/admin.conf root@k8s-node02:/etc/kubernetes/
+```
+
+2. 在worker中设置环境变量，以便知道到哪里查找相关配置
+
+```bash
+echo 'export KUBECONFIG=/etc/kubernetes/admin.conf' >> /root/.bash_profile
+source /root/.bash_profile
+```
+
+ 
