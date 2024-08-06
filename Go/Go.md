@@ -121,27 +121,50 @@ NOTE：命名返回值最好用在短小的函数中，用在长函数中会影�
 
 ### 基本数据类型
 
-> bool
-> string
-> int  int8  int16  int32  int64
-> uint uint8 uint16 uint32 uint64 uintptr
-> byte // alias for uint8
-> rune // alias for int32
->           // represents a Unicode code point
-> float32 float64
-> complex64 complex128
+- bool
+- string
+- int  int8  int16  int32  int64
+- uint uint8 uint16 uint32 uint64 uintptr
+- byte // uint8的别名
+- rune // int32的别名，用于表示Unicode字符
+- float32 float64
+- complex64 complex128
 
 其中，`int, uint, uintptr`在32位机器上是32位，在64位机器上是64位。
 
-NOTE：当想要使用整数变量时，除非特殊需要，最好都用`int`类型，这样可以保持代码的简洁性和可读性，且兼容性更好。
+---
 
-**默认初始化**
+**实际使用时：**
 
-当声明的变量没有显式初始化时，所有变量都会被给一个0值
+- **整数**：当想要使用整数变量时，除非特殊需要，最好都用`int`类型，这样可以保持代码的简洁性和可读性，且兼容性更好。
 
-- `0` for numeric types,
-- `false` for the boolean type, and
-- `""` (the empty string) for strings.
+- **浮点数**：浮点数尽量使用`float64`，因为float32类型的累计计算误差很容易扩散，并且float32 能精确表示的正整数并不是很大（译注：因为float32的有效bit位只有23个，其它的bit位用于指数 和符号；当整数大于23bit能表达的范围时，float32的表示将出现误差）
+
+  ```go
+  var f float32 = 16777216 // 1 << 24
+  fmt.Println(f == f+1) // "true"!
+  ```
+
+- **布尔值**：`&&`的优先级比`||`高，因此如下的表达式不需要小括号：
+
+  ```go
+  if 'a' <= c && c <= 'z' ||
+      'A' <= c && c <= 'Z' ||
+      '0' <= c && c <= '9' {
+      // ...ASCII letter or digit...
+  }
+  ```
+
+- **byte、rune与字符**：byte表示ASCII字符，rune表示unicode字符，两个类型都是整型的**别名**，也就是说本就是使用整型来表示的字符
+
+  ```go
+  // 理解“别名”的意思
+  var a byte = 10
+  var b uint8 = 'x' 
+  c := a + b
+  ```
+
+  
 
 ### 类型转换
 
@@ -281,9 +304,88 @@ func g() {
 
 
 
-### 常量的声明
+### 常量
 
-方法和变量类似，只不过把`var`换成`const`，并且不能使用`:=`简短声明。
+#### 常量的声明
+
+方法和变量类似，只不过把`var`换成`const`，并且不能使用`:=`简短声明
+
+**批量声明**
+
+因为常量需要在编译时确定值，所以一定要有初始值。在批量声明时，第一个变量的初始值不能省略。后面省略初始值的常量会沿用前面最近的初始值。
+
+```go
+const (
+a = 1
+b
+c = 2
+d
+)
+fmt.Println(a, b, c, d) // "1 1 2 2"
+```
+
+#### iota常量生成器 vs 枚举
+
+对于常量的批量声明语句，可以借助`iota`给常量初始值。`iota`起始值为0，每往下一行加一。
+
+```go
+type Weekday int
+const (
+    Sunday Weekday = iota
+    Monday
+    Tuesday
+    Wednesday
+    Thursday
+    Friday
+    Saturday
+)  // 周日-周一 分别对应0-7
+```
+
+更复杂的初始值规则：
+
+```go
+const (
+    _ = 1 << (10 * iota)   // 初始值规则就像一个函数，函数的x是iota
+    KiB // 1024
+    MiB // 1048576
+    GiB // 1073741824
+    TiB // 1099511627776 (exceeds 1 << 32)
+    PiB // 1125899906842624
+    EiB // 1152921504606846976
+    ZiB // 1180591620717411303424 (exceeds 1 << 64)
+    YiB // 1208925819614629174706176
+)
+```
+
+#### 无类型常量
+
+在声明常量是可以明确指定常量的基础类型，但是如果省略类型，那么常量通常是没有明确基础类型的。因此存在无类型整数、无类型浮点数等。所谓无类型，就是只能从初始值推断出这是整型，但是没有明确到底是哪一种整型。
+
+- 无类型常量可以具有更大的精度，至少256bit
+
+- 无类型常量可以避开类型安全的限制，将同一个常量混在不同类型的表达式中
+
+  ```go
+  	var a int8
+  	var b int16
+  	var c uint32
+  	fmt.Printf("type: %T\tvalue: %d\n", a+Sunday, a+Sunday)
+  	fmt.Printf("type: %T\tvalue: %d\n", b+Monday, b+Monday)
+  	fmt.Printf("type: %T\tvalue: %d\n", c+Tuesday, c+Tuesday)
+  ```
+
+  <img src="../images/image-20240806100400799.png" alt="image-20240806100400799" style="zoom:67%;" />
+
+- 当无类型常量出现在具有明确类型的变量的赋值语句的右边时，可以发生隐式类型转换：
+
+  ```go
+  var f float64 = 3 + 0i // untyped complex ‐> float64
+  f = 2 		// untyped integer ‐> float64
+  f = 1e123 	// untyped floating‐point ‐> float64
+  f = 'a'		// untyped rune ‐> float64
+  ```
+
+对于**常量面值**，不同的写法可能会对应不同的类型。例如0、0.0、0i和'\u0000'虽然有着相同的常量值，但是它们分别对应无类型的整数、无类型的浮点数、无类型的复数和无类型的字符等不同的常 量类型。
 
 
 
@@ -320,9 +422,182 @@ func CToF(c Celsius) Fahrenheit { return Fahrenheit(c*9/5 + 32) /* 类型转换 
 func FToC(f Fahrenheit) Celsius { return Celsius((f ‐ 32) * 5 / 9) /* 类型转换 */}
 ```
 
-#### Go 的类型系统和类型安全
+#### Go 的类型安全（重要概念）
 
-在 Go 语言中，类型是一个非常重要的概念。Go 语言设计的一个核心理念是类型安全性，这意味着在不同类型之间进行操作时，必须显式地进行类型转换，从而避免了许多潜在的错误。与许多其他语言不同，Go 不允许在不同类型之间进行隐式转换。例如，不能直接将 `int` 类型的值赋给 `float64` 类型的变量，反之亦然。
+在 Go 语言中，类型是一个非常重要的概念。Go 语言设计的一个核心理念是**类型安全**，这意味着在不同类型之间进行操作时，必须显式地进行类型转换，从而避免了许多潜在的错误。与许多其他语言不同，Go 不允许在不同类型之间进行隐式转换。例如，不能直接将 `int` 类型的值赋给 `float64` 类型的变量，反之亦然。
+
+```go
+var apples int32 = 1
+var oranges int16 = 2
+var compote int = apples + oranges // compile error
+```
+
+
+
+### 字符串
+
+字符串：一个只读byte数组
+
+- `len(s)`返回的是byte长度，即便`s`中存放有rune字符
+
+- `s[i]`返回的是索引为`i`的字节对应的字符，即是按ASCII码解释字符串
+
+- 字符串是不可修改的，但是**字符串变量**可以被赋予另一个字符串的值
+
+  ```go
+  s := "hello"
+  s[0] = 'H'  // 错误，不能修改字符串内部的值
+  s = s + ", world"  // 正确，但是不是在原有字符串后追加，而是生成一个新的字符串，并将其赋值给s
+  ```
+
+#### 原生字符串
+
+可以在反引号中写原生的字符串字面值。所谓“原生”，看到的是什么就是什么，不存在转义：
+
+```go
+s := `anything
+'is'
+"ok"
+//anything//
+\\you\\
+\n see \n
+`
+//注意第二行开始的内容要顶格写，不然缩进也会被认为是字符串的一部分
+```
+
+<img src="../images/image-20240805145439900.png" alt="image-20240805145439900" style="zoom:67%;" />
+
+#### unicode码与utf-8编码
+
+unicode收集了世界上所有符号系统，包括了一百多种语言，每个符号使用32bit表示。
+
+**utf-32**：字符序列中，每个字符都使用32位来表示
+
+**utf-8**：变长编码，每个字符可以使用1/2/3/4 byte表示
+
+```
+0xxxxxxx runes 0‐127 (ASCII)
+110xxxxx 10xxxxxx 128‐2047 (values <128 unused)
+1110xxxx 10xxxxxx 10xxxxxx 2048‐65535 (values <2048 unused)
+11110xxx 10xxxxxx 10xxxxxx 10xxxxxx 65536‐0x10ffff (other values unused)
+```
+
+#### 使用转义的数字表示字符
+
+可以使用转义在字符串面值包含任意的字节：
+
+- `\xhh`：十六进制，其中两个h表示十六进制数字（大写或小写都可以）
+- `\ooo`：八进制，包含三个八进制的o数字（0到7），但是不能超过\377
+- `\uhhhh`：十六进制，对应16位码点值
+- `\Uhhhhhhhh`：十六进制，对应32位码点值
+
+```go
+// 下面四者等价
+"世界"
+"\xe4\xb8\x96\xe7\x95\x8c"
+"\u4e16\u754c"
+"\U00004e16\U0000754c"
+```
+
+#### utf-8文本的解码与使用
+
+```go
+import "unicode/utf8"  // utf-8编码的工具在这个包中
+
+s := "Hello, 世界"
+
+// 按utf8编码计算字符串的长度
+fmt.Println(len(s)) // "13"
+fmt.Println(utf8.RuneCountInString(s)) // "9"
+
+// 按utf8解码并打印字符串
+for i := 0; i < len(s); {
+    r, size := utf8.DecodeRuneInString(s[i:])
+    fmt.Printf("%d\t%c\n", i, r)
+    i += size
+}
+
+// range循环会隐式解码utf8字符串
+for i, r := range "Hello, 世界" {
+	fmt.Printf("%d\t%q\t%d\n", i, r, r)  // %q - 带单引号的unicode字符（%c不带单引号）
+} // 输出结果见下图
+```
+
+<img src="../images/image-20240805153451982.png" alt="image-20240805153451982" style="zoom:60%;" />
+
+#### `fmt.Printf`格式化输出
+
+```
+%d 十进制整数
+%x, %o, %b 十六进制，八进制，二进制整数。
+%f, %g, %e 浮点数： 3.141593 3.141592653589793 3.141593e+00
+%t 布尔：true或false
+%c 字符（rune） (Unicode码点)
+%s 字符串
+%q 带双引号的字符串"abc"或带单引号的字符'c'
+%v 变量的自然形式（natural format）
+%T 变量的类型
+%% 字面上的百分号标志（无操作数）
+```
+
+#### 字符串与字节数组
+
+字符串与字节数组（slice）可以相互转换：
+
+```go
+s := "abc"
+b := []byte(s)   // 分配了一个新的字节数组用于保存字符串数据的拷贝
+s2 := string(b)  // 由字节数组创建了一个字符串拷贝
+```
+
+##### strings与bytes包中的常用函数
+
+```go
+import "strings"
+
+func Contains(s, substr string) bool   // 检查字符串 s 是否包含子字符串 substr
+func Count(s, sep string) int   // 返回子字符串 sep 在字符串 s 中出现的次数
+func Fields(s string) []string   // 将字符串 s 按照空白字符（空格、制表符等）分割成多个字段，并返回一个字符串切片
+func HasPrefix(s, prefix string) bool   // 检查字符串 s 是否以子字符串 prefix 开头
+func Index(s, sep string) int   // 返回子字符串 sep 在 s 中第一次出现的位置，未找到返回 -1（有LastIndex）
+func Join(a []string, sep string) string   // 以sep为分隔符，将string数组中的字符串合成一个字符串
+```
+
+```go
+import "bytes"
+
+func Contains(b, subslice []byte) bool
+func Count(s, sep []byte) int
+func Fields(s []byte) [][]byte
+func HasPrefix(s, prefix []byte) bool
+func Index(s, sep []byte) int
+func Join(s [][]byte, sep []byte) []byte
+```
+
+#### 动态增长的字节数组
+
+bytes包提供了Buffer**类型**用于字节slice的缓存，可以实现字节数组的动态增长。Buffer类型变量不需要初始化，其零值也是有效的，表示Buffer为空：
+
+```go
+func intsToString(values []int) string {
+	var buf bytes.Buffer // 声明Buffer变量
+	buf.WriteByte('[')  // WriteByte方法向Buffer写ASCII字符
+	for i, v := range values {
+		if i > 0 {
+			buf.WriteString(", ")  // WriteString方法向Buffer写字符串
+		}
+		fmt.Fprintf(&buf, "%d", v) // 通过fmt.Fprintf向Buffer写格式化字符串
+	}
+	buf.WriteByte(']')
+	return buf.String()
+}
+
+func main() {
+	fmt.Println(intsToString([]int{1, 2, 3})) // "[1, 2, 3]"
+}
+```
+
+
 
 
 

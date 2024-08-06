@@ -42,6 +42,9 @@
    ```bash
    # 需要下载3个组件（最新版本的docker-ce中不再包含后两个组件）
    sudo apt-get install docker-ce docker-ce-cli containerd.io
+   
+   ### 可以直接下载docker.io
+   sudo apt-get install -y docker.io
    ```
 
 `docker-ce`, `docker-ce-cli`, 和 `containerd.io` 这三个包分别包含以下内容：
@@ -51,6 +54,12 @@
 2. `docker-ce-cli`：这是Docker的命令行接口，提供了一系列的命令，使用户可以通过命令行来操作Docker，例如创建、启动、停止容器，拉取和推送镜像等。
 
 3. `containerd.io`：这是Docker使用的**容器运行时**。容器运行时是一种软件，它负责在操作系统上运行和管理容器。`containerd.io` 是一个开源的容器运行时，它可以独立于Docker使用，也可以作为Docker的一个组件使用。
+
+4. **docker.io**：
+   - **包含内容**：Docker 引擎、CLI 和其他必要的工具，类似于 `docker-ce`、`docker-ce-cli` 和 `containerd.io`。
+   - **版本**：通常不是最新的版本，而是软件库中认为稳定和可靠的版本。
+   - **来源**：来自 Debian 或 Ubuntu 的官方软件库。
+
 
 ## docker镜像的创建
 

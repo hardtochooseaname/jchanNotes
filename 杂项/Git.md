@@ -268,3 +268,19 @@ PS E:\Learning\notes\LearningNotes> git branch -vv
 - [origin/master]：当前分支与远程的origin仓库的master分支相关联
 
 - add local note：当前分支最新提交的commit信息
+
+
+
+## 将本地repo上传到GitHub的repo
+
+```sh
+# 当前目录是已经init的repo根目录
+git remote add origin git@github.com:hardtochooseaname/jchanNotes.git 
+git branch -M main
+git push -u origin main
+```
+
+1. **添加远程仓库**：`git remote add origin git@github.com:hardtochooseaname/jchanNotes.git` 将远程仓库 `git@github.com:hardtochooseaname/jchanNotes.git` 添加为名为 `origin` 的远程仓库。
+2. **重命名当前分支**：`git branch -M main` 将当前分支重命名为 `main`。
+3. **推送并设置上游分支**：`git push -u origin main` 将 `main` 分支推送到远程仓库 `origin`，并设置上游分支。
+

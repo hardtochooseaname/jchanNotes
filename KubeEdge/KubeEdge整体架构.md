@@ -65,3 +65,64 @@ KubeEdge就是使用CRD机制拓展了API，定义了Device和Device Model两种
  
 
 <img src="..\images\image-20240731154251814.png" alt="image-20240731154251814" style="zoom: 80%;" />
+
+
+
+## kubedge生产实践
+
+![img](../images/kubeedge_arch.png)
+
+### kubeedge生产部署
+
+- CloudCore采用容器化部署
+- CloudCore实例数 >= 3，以提供稳定的服务和连接（cloudcore采用滚动更新）
+- CloudCore通过负载均衡发布服务
+
+<img src="../images/image-20240806104118477.png" alt="image-20240806104118477" style="zoom:80%;" />
+
+### 安全生产实践
+
+- cloudcore和edgecore通信环境通常不够安全，因此会使用证书加密实现双向认证，保障通信安全
+- 推荐企业使用可信安全的CA根证书
+
+![image-20240806104318607](../images/image-20240806104318607.png)
+
+### 边缘日志收集分析系统
+
+- fluentd：部署于需要采集日志的边缘节点，用于日志收集
+  - 需要edgecore开启list-watch功能，用于获取pod的信息，以便进行日志收集
+- elasticsearch：实时的、分布式的、可拓展的搜索引擎，用于收集存储由fluentd收集的日志
+  - fluentd通过http发送日志数据
+  - 需要暴露9200端口给边缘的fluentd，用于接收数据
+- kibana，数据可视化dashboard
+
+<img src="../images/image-20240806104610306.png" alt="image-20240806104610306" style="zoom:80%;" />
+
+
+
+### EdgeCore的升级
+
+![image-20240806110143315](../images/image-20240806110143315.png)
+
+![image-20240806110251824](../images/image-20240806110251824.png)
+
+
+
+### 安装常见问题
+
+https://www.bilibili.com/video/BV1z84y1r79h/?spm_id_from=333.1007.top_right_bar_window_history.content.click&vd_source=8205edcb8d5d68d6331e9295bb6ccde9
+
+51‘50’‘
+
+![image-20240806110604812](../images/image-20240806110604812.png)
+
+![image-20240806110621090](../images/image-20240806110621090.png)
+
+![image-20240806110633340](../images/image-20240806110633340.png)
+
+![image-20240806110643385](../images/image-20240806110643385.png)
+
+![image-20240806110651147](../images/image-20240806110651147.png)
+
+![image-20240806110701376](../images/image-20240806110701376.png)
+
