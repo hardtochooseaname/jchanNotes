@@ -175,8 +175,14 @@ spec: # 期望 Pod 按照这里面的描述进行创建
 容器在整个生命周期中只会被调度一次。一旦pod被assigned到某个节点运行，那么这个pod会一直运行直到主动停止或者错误终止。如果某个节点挂了，这个节点上的pods不会被重新调度，而会被安排delete。
 
 1. Endpoint删除pod的ip地址
-2. Pod变成Terminating状态，等待宽限时间`terminationGracePeriodSeconds`给用户做`PreStop`操作。宽限时间默认30s，如果超过这个时间就会立即终止。
+2. Pod变成Terminating状态，等待宽限时间`terminationGracePeriodSeconds`给用户做`PreStop`操作。宽限时间默认30s，如果超过这个时间就会立即终止。（宽限时间被用于优雅地gracefully退出）
 3. 执行`PreStop`钩子函数
+
+#### 强制删除出错的pod
+
+```sh
+kubectl delete pod <pod-name> --grace-period=0 --force
+```
 
 
 
@@ -316,73 +322,6 @@ A Pod's `status` field is a [PodStatus](https://kubernetes.io/docs/reference/gen
 | `Succeeded` | All containers in the Pod have terminated in success, and <span style="color:tomato">will not be restarted</span>. |
 | `Failed`    | All containers in the Pod have terminated, and at least one container has terminated in failure. That is, the container either exited with non-zero status or was terminated by the system, and is not set for automatic restarting. |
 | `Unknown`   | For some reason the state of the Pod could not be obtained. This phase typically occurs due to an error in communicating with the node where the Pod should be running. |
-
-
-
-## 标签label & 选择器selector
-
-### 打标签的两种方式
-
-1. 配置文件中：
-
-   - 各类资源的`metadata.labels`字段
-
-     ```yaml
-     apiVersion: v1 
-     kind: Pod  # 资源对象类型
-     metadata: # Pod 相关的元数据，用于描述 Pod 的数据
-       name: nginx-demo # Pod 的名称
-       labels: # 定义 Pod 的标签
-         type: app
-         test: 1.0.0 
-     ```
-
-2. `kubectl label`命令打**临时标签**
-
-### `kubectl label`命令
-
-#### 查看各类资源的标签：`--show-labels`
-
-![image-20240626110355602](..\images\image-20240626110355602.png)
-
-#### 设置临时标签：
-
-````sh
-kubectl label <资源类型> <资源名称> <label-name>=<label-value>
-````
-
-![image-20240626110734122](..\images\image-20240626110734122.png)
-
-#### 临时修改标签：`--overwrite`
-
-![image-20240626110923314](..\images\image-20240626110923314.png)
-
-#### 删除标签：`<label-name>-`
-
-```sh
-kubectl label <资源类型> <资源名称> <label-name>-
-```
-
-![image-20240704173748080](..\images\image-20240704173748080.png)
-
-
-
-### 在命令行使用selector筛选资源
-
-```bash
-# 单个label的单值匹配
-kubectl get po -l version=1.0.0
-# 非 ！
-kubectl get po -l version!=1.0.0
-
-# 单个label的多值匹配
-kubectl get po -l `version in (1.0.0, 1.1.0, 1.1.1)`
-
-# 多个label的单值匹配
-kubectl get po -l version=1.1.1,type=app
-# 多个label的多值匹配
-kubectl get po -l `version=1.1.1,type=app,author in (aaa, bbb, ccc)`
-```
 
 
 

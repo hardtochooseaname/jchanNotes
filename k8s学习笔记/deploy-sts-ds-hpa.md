@@ -20,6 +20,8 @@
 
 ### yaml文件
 
+一个要注意的点：在pod的模板中不需要指定pod的名字，因为pod的名字会根据deployment的名字自动生成的
+
 ```yaml
 apiVersion: apps/v1  # 要指出deployment资源的api组是apps
 kind: Deployment
