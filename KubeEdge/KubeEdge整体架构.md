@@ -58,7 +58,7 @@ CRD（Custom Resource Definition，自定义资源定义）是 Kubernetes 中的
 KubeEdge就是使用CRD机制拓展了API，定义了Device和Device Model两种资源，用于对端的边缘设备的管理
 
 - Device Model：同类设备的抽象。例如对空调这个设备的抽象，定义空调设备应该具有的属性。
-- Device：设备实例。例如家里某台具体的空调。
+- Device：设备实例。例如家里某台具体的空调，记录了空调的各项参数。
 
 ![image-20240731154356516](..\images\image-20240731154356516.png)
 
@@ -69,6 +69,8 @@ KubeEdge就是使用CRD机制拓展了API，定义了Device和Device Model两种
 
 
 ## kubedge生产实践
+
+### kubeedge架构图
 
 ![img](../images/kubeedge_arch.png)
 
@@ -105,6 +107,31 @@ KubeEdge就是使用CRD机制拓展了API，定义了Device和Device Model两种
 ![image-20240806110143315](../images/image-20240806110143315.png)
 
 ![image-20240806110251824](../images/image-20240806110251824.png)
+
+
+
+## kubeedge安装
+
+### EdgeCore的安装
+
+#### 安装前置检查
+
+1. 清理干净原有的kubelet进程（如果有的话）
+2. 关闭MQTT相关的管理进程，尤其注意不能占用MQTT的监听端口（1883、1884）
+3. 确保EdgeCore的安装目录未被占用，默认安装位置`/etc/kubeedge`
+
+#### 安装
+
+- kubeedge安装包用于安装kubeedge组件
+- kuadm安装包用于把边缘节点加入集群
+
+<img src="../images/image-20240812143732557.png" alt="image-20240812143732557" style="zoom:67%;" />
+
+#### 安装后
+
+<img src="../images/image-20240812144855041.png" alt="image-20240812144855041" style="zoom:67%;" />
+
+<img src="../images/image-20240812145130179.png" alt="image-20240812145130179" style="zoom:80%;" />
 
 
 

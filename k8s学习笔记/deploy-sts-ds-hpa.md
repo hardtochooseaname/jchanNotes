@@ -174,7 +174,7 @@ kubectl rollout resume deployment nginx-deployment
 
 缩写：sts
 
-StatefulSet是用于管理有状态服务的应用，有状态服务需要稳定的网络配置与持久化存储
+StatefulSet是用于管理有状态服务的应用，有状态服务需要稳定的**网络配置**与**持久化存储**
 
 ![image-20240626174513540](..\images\image-20240626174513540.png)
 

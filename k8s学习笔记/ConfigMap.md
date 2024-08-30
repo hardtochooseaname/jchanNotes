@@ -10,7 +10,7 @@ Examples:
   kubectl create configmap my-config --from-file=path/to/bar
   
   # --from-file=<文件>：只加载指定的文件
-  kubectl create configmap my-config --from-file=key1=/path/to/bar/file1.txt --from-file=key2=/path/to/bar/file2.txt
+  kubectl create configmap my-config --from-file=/path/to/bar/file1.txt --from-file=/path/to/bar/file2.txt
   
   # --from-file=<新文件名>=<文件>：在configmap中把配置文件重命名
   kubectl create configmap my-config --from-file=key1=/path/to/bar/file1.txt --from-file=key2=/path/to/bar/file2.txt

@@ -449,8 +449,3 @@ docker run --network=my_bridge_network --ip=192.168.0.5 -d my-image
 因此，如果你需要在容器中访问宿主机上已经存在的文件或目录，你应该使用bind mounts。如果你需要一个由Docker管理的持久化存储（保存容器运行中产生的数据），你应该使用Docker managed volumes。
 
 
-
-# docker实践
-
-### 机器A上拉取镜像发送到机器B（A联网B没网）
-

@@ -68,13 +68,13 @@ service主要的功能是提供东西流量的转发，也就是集群内部的�
 5. 从windows上通过service-ip访问：不能访问 
    - service-ip是集群的内网ip，windows既不在集群内网中，也没有对这个ip的路由信息
 
-### service示例图
+### service原理图
 
 service有一个很重要的组件就是 EndPoint，每次创建service的时候都会创建配套的EndPoint，ep里面记录了service所关联的所有pod的ip，以及映射到pod内部的targetPort。EndPoint也是一种系统资源，简写是ep。
 
 ![image-20240627144251354](..\images\image-20240627144251354.png)
 
-#### 配置文件
+### 基础配置文件
 
 ```yaml
 apiVersion: v1
@@ -88,7 +88,7 @@ spec:
   - port: 80 # service自身暴露的端口，结合service的内网ip可以进行访问
     targetPort: 80  # service关联的pod使用的端口
     #nodePort: 32123 # 固定绑定到所有node的这个端口上
-    name: web
+    name: web # 端口的名字，取名不重要，主要是方便辨识
   selector: # 选择器，所有匹配的pod都为与该service绑定，从而可以通过service访问到pod
     app: nginx-deploy
   type: NodePort
@@ -163,9 +163,9 @@ subsets:
     protocol: TCP
 ```
 
-可以看到，service中没有选择器，要分别创建service和endpoint，同时把两者绑定起来，需要：
+可以看到，service中没有选择器，而service与endpoint本身是强绑定关系，这需要两者：
 
-1. metadata元数据一致
+1. 名字与标签一致
 2. 端口信息ports一致
 
 ### 配置文件2 - ExternalName
