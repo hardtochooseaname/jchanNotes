@@ -2,11 +2,11 @@
 
 ![img](../images/ls-diagram-5be7dd68b135f573a7b0e163692e6800.png)
 
-# 监控（Observation）
+## 监控（Observation）
 
-## 不同框架应用的监控对象的区别
+![LangSmith Primitives](../images/primitives-708e671bad3ba4cd65e2eaaa3d64d40b.png)
 
-LangSmith与LangChain/LangGraph无缝集成，不需要额外设置就可以自动监控LangChain 和 LangGraph 应用，而对于对于 **非 LangChain/LangGraph 框架的应用**，需要手动设置监控的内容。
+LangSmith与LangChain/LangGraph无缝集成，不需要额外设置就可以自动监控LangChain 和 LangGraph 应用，而对于 **非 LangChain/LangGraph 框架的应用**，需要手动设置监控的内容。
 
 ### LangChain
 
