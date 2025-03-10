@@ -4,6 +4,11 @@
 
 ### packages
 
+- package是go语言组织源码的方式，分package就好像是对源码分组。一组源码文件放在一个目录下，组内不同源码文件中实体的名字都是互通的。（所以我们会说某个变量是包级变量，而不是文件级变量）
+
+- 一般目录名就是包名，但是也可以自定义包名（这时包的导入路径还是目录的路径）
+- 一个目录下只能有一个包
+
 go程序是由packages编译构建而成，每个go程序都从main这个package开始执行（入口点）
 
 1. 每个.go源文件必须是以**package**声明语句开头，即`package <package-name>`，以说明当前源文件属于哪个包。一个包可能由多个源文件组成。
@@ -205,7 +210,7 @@ Or, put more simply:
 
 > i := 42
 > f := float64(i)
-> u := uint(f)
+> u := uint(f)	
 
 **NOTE:**
 
@@ -353,7 +358,13 @@ fmt.Println(a, b, c, d) // "1 1 2 2"
 
 #### iota常量生成器 vs 枚举
 
-对于常量的批量声明语句，可以借助`iota`给常量初始值。`iota`起始值为0，每往下一行加一。
+对于常量的批量声明语句，可以借助`iota`给常量初始值。
+
+**`iota` 的工作方式**
+
+- **初始值为 0：** 当 `const` 关键字出现时，`iota` 会被重置为 0。
+- **递增规则：** 在同一个 `const` 声明块中，每当 `iota` 被使用时，它的值会自动递增 1。
+- **行索引：** 可以将 `iota` 理解为 `const` 声明块中的行索引，从 0 开始计数。
 
 ```go
 type Weekday int
@@ -372,7 +383,7 @@ const (
 
 ```go
 const (
-    _ = 1 << (10 * iota)   // 初始值规则就像一个函数，函数的x是iota
+    _ = 1 << (10 * iota)   // 初始值规则就像一个函数，函数的x是iota  // 可以通过_符号舍弃初始0值
     KiB // 1024
     MiB // 1048576
     GiB // 1073741824
@@ -390,7 +401,7 @@ const (
 
 - 无类型常量可以具有更大的精度，至少256bit
 
-- 无类型常量可以避开类型安全的限制，将同一个常量混在不同类型的表达式中
+- 无类型常量可以**避开类型安全的限制**，因为其无类型，因此可以与不同类型的变量发生计算，不会存在类型检查的问题
 
   ```go
   	var a int8
@@ -421,7 +432,7 @@ const (
 变量或表达式的类型定义了对应存储值的属性特征，例如数值在内存的存储大小（或者是元素的bit 个数），它们在内部是如何表达的，是否支持一些操作符，以及它们自己关联的方法集等。
 
 ```go
-type 类型名字 底层类型
+type 类型名字 = 底层类型
 ```
 
 #### 声明新类型的意义
@@ -465,11 +476,11 @@ var compote int = apples + oranges // compile error
 
 字符串：一个只读byte数组
 
-- `len(s)`返回的是byte长度，即便`s`中存放有rune字符
+- `len(s)`返回的是**byte**长度，即便`s`中存放有rune字符
 
-- `s[i]`返回的是索引为`i`的字节对应的字符，即是按ASCII码解释字符串
+- `s[i]`返回的是索引为`i`的**字节**对应的字符，即是按ASCII码解释字符串
 
-- 字符串是不可修改的，但是**字符串变量**可以被赋予另一个字符串的值
+- 字符串是不可修改的，但是**字符串变量**可以参与运算生成新的字符串
 
   ```go
   s := "hello"
@@ -573,8 +584,8 @@ for i, r := range "Hello, 世界" {
 
 ```go
 s := "abc"
-b := []byte(s)   // 分配了一个新的字节数组用于保存字符串数据的拷贝
-s2 := string(b)  // 由字节数组创建了一个字符串拷贝
+b := []byte(s)   // 分配了一个新的字节数组用于保存字符串数据的拷贝（会发生数据拷贝-why？）
+s2 := string(b)  // 由字节数组创建了一个字符串拷贝（会发生数据拷贝-why？）
 ```
 
 ##### strings与bytes包中的常用函数
@@ -608,12 +619,12 @@ bytes包提供了Buffer**类型**用于字节slice的缓存，可以实现字节
 ```go
 func intsToString(values []int) string {
 	var buf bytes.Buffer // 声明Buffer变量
-	buf.WriteByte('[')  // WriteByte方法向Buffer写ASCII字符
+	buf.WriteByte('[')  // 1. WriteByte方法向Buffer写ASCII字符
 	for i, v := range values {
 		if i > 0 {
-			buf.WriteString(", ")  // WriteString方法向Buffer写字符串
+			buf.WriteString(", ")  // 2. WriteString方法向Buffer写字符串
 		}
-		fmt.Fprintf(&buf, "%d", v) // 通过fmt.Fprintf向Buffer写格式化字符串
+		fmt.Fprintf(&buf, "%d", v) // 3. 通过fmt.Fprintf向Buffer写格式化字符串（这里可以看出bytes.Buffer相当于一个输出缓冲区）
 	}
 	buf.WriteByte(']')
 	return buf.String()
@@ -636,9 +647,9 @@ func main() {
 
 基本语法和C类似，但是有两点不同（同样适用于if）：
 
-1. 不需要小括号
+1. **不需要**小括号
 
-2. 必须要花括号
+2. **必须要**花括号
 
 ```go
 	for i := 0; i < 10; i++ {
@@ -652,7 +663,7 @@ func main() {
 
 
 
-#### 省略 init and post statements
+#### while循环 | 省略 init and post statements
 
 ```go
 	for ; sum < 1000; {
@@ -660,7 +671,7 @@ func main() {
 	}
 ```
 
-#### 进一步省略分号 -> while
+#### while循环 | 进一步省略分号 == while
 
 **NOTE：**在go中，没有while只有for，for只留下第二个判断表达式就是while
 
@@ -670,14 +681,30 @@ func main() {
 	}
 ```
 
-#### 再省略判断表达式 -> 无限循环
+#### while循环 | 再省略判断表达式 == 无限循环
 
 ```go
 	for {
 	}
 ```
 
-### if判断
+### for + range
+
+在 Go 语言中，`for` 循环可以与 `range` 关键字结合使用，用于遍历**数组**、**切片**、**字符串**、**映射**和**通道**等数据结构。这种方式更加简洁、高效，并且易于理解。
+
+```go
+for index, value := range collection {
+    // 循环体
+}
+```
+
+- `index`：当前元素的索引（对于映射来说，是键）。
+- `value`：当前元素的值。
+- `collection`：要遍历的集合，可以是数组、切片、字符串、映射或通道。
+
+
+
+## if 判断
 
 #### 基础用法
 
@@ -704,3 +731,23 @@ func pow(x, n, lim float64) float64 {
 	return lim
 }
 ```
+
+- 
+
+
+
+## switch
+
+用法与c类似，只是少个表达式周围的小括号
+
+```go
+switch expression {
+case value1:
+    // 当 expression 的值等于 value1 时，执行这里的代码
+case value2:
+    // 当 expression 的值等于 value2 时，执行这里的代码
+default:
+    // 当 expression 的值与任何一个 case 都不匹配时，执行这里的代码
+}
+```
+
