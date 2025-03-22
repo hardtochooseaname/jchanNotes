@@ -1,21 +1,12 @@
-## Why
-
-- 准确性和回答质量
-
-- 数据可视化/human friendly/human readable
-  - 便于应用的开发调试与维护
-  - 解释性（why the application reacted this way / why this happened）
-  - 便于数据的管理
-
-
-
 # 论文
 
-## 1. Introduction
+## Introduction
 
 ### 出发点 / 背景
 
 人类的进步依赖我们阅读和推理大量文本内容的集合，而往往我们得出的结论都是远远超出文本所原本陈述的东西。这个过程就叫做 **sensemaking** （意义构建：一个认知过程，通过这个过程，人们试图理解和解释他们所处的环境和事件，以便采取适当的行动。）
+
+
 
 ### 解决的问题
 
@@ -44,14 +35,14 @@ QFS需要回答用户**抽象性、综合性的问题**，根据用户的查询�
 
 
 
-## 2. 知识图谱
+### GraphRAG的核心：知识图谱
 
-### 知识图谱的提取
+#### 知识图谱的提取
 
 - Other Techniques: rule-matching, statistical pattern recognition, clustering, and embeddings 
 - GraphRAG: LLMs
 
-### 知识图谱的使用
+#### 知识图谱的使用
 
 - 路人甲：把子图、图的元素、元素属性等内容直接塞进提示词，作为回答问题的事实性支撑
 - 路人乙：在查询的时候，利用一个agent来动态地从节点和边来遍历图结构
@@ -59,7 +50,7 @@ QFS需要回答用户**抽象性、综合性的问题**，根据用户的查询�
 
 
 
-## 3. 社区
+## 补充知识：社区
 
 定义：强内部联结但弱外部联结的节点子集。（内紧外松）
 
@@ -153,6 +144,232 @@ Leiden算法在处理**大规模图数据和高密度社群**时更具优势，�
 
 
 
+## GraphRAG流程图
+
+![image-20250322182657162](../images/image-20250322182657162.png)
+
+## Index 阶段
+
+### 1. Source Documents → Text Chunks
+
+**关键：chunk大小**
+
+- chunk 越大，发起LLM调用的次数越少，token消耗越少
+- chunk 越小，信息召回率越高，图提取的遗漏越少、准确性越高
+
+### 2. Text Chunks → Entities & Relationships
+
+#### 主要工作：
+
+1. 利用 LLM 从每个 chunk 中提取重要的实体和关系
+2. 同时 LLM 会为每个实体和关系生成个简短描述
+
+#### 提示词（节选）：
+
+**1. extract_graph.py (extrac_entity.txt) : **
+
+```markdown
+1. 识别所有实体。对于每个已识别的实体，提取以下信息:
+- entity_name: 实体名称
+- entity_type: 以下类型之一: [{entity_types}]
+- entity_description: 实体属性和活动的综合描述
+将每个实体格式化为 ("entity"{tuple_delimiter} <entity_name>{tuple_delimiter} <entity_type>{tuple_delimiter} <entity_description>)
+
+2. 从步骤 1 中识别的实体中，识别所有 *明显相关* 的 (source_entity, target_entity) 对。
+对于每对相关实体，提取以下信息:
+- source_entity: 源实体的名称，如步骤 1 中所述
+- target_entity: 目标实体的名称，如步骤 1 中所述
+- relationship_description: 解释您认为源实体和目标实体相互关联的原因
+- relationship_strength: 表示源实体和目标实体之间关系强度的数字分数
+将每个关系格式化为 ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_strength>)
+```
+
+> 关系的 `relationship_strength`字段，提示词并没有说明评分范围，猜测是 1~10
+
+---
+
+**2. extract_claims.py (claim_extraction.txt) :**
+
+```markdown
+-步骤-
+1. 提取与预定义实体规范匹配的所有命名实体。实体规范可以是实体名称列表或实体类型列表。
+2. 对于步骤 1 中确定的每个实体，提取与该实体相关的所有声明。声明需要与指定的声明描述匹配，并且实体应该是声明的主体。
+对于每个声明，提取以下信息:
+- 主体:声明主体的实体名称。主体实体是实施声明中描述的操作的实体。主体必须是步骤 1 中确定的命名实体之一。
+- 客体:声明客体的实体名称。对象实体是报告/处理或受声明中描述的操作影响的对象实体。如果对象实体未知，请使用**NONE**。
+- 声明类型:声明的总体类别。以可以在多个文本输入中重复的方式命名，以便类似的声明共享相同的声明类型
+- 声明状态:**TRUE**, **FALSE**或**SUSPECTED**。TRUE 表示声明已确认，FALSE 表示声明被发现为虚假，SUSPECTED 表示声明未经核实。
+- 声明说明:详细说明声明背后的原因，以及所有相关证据和参考资料。
+- 声明日期:声明的期间(start_date，end_date)。start_date 和 end_date 都应采用 ISO-8601 格式。如果声明是在单个日期而不是日期范围内提出的，请为 start_date 和 end_date 设置相同的日期。如果日期未知，则返回**NONE**。
+- 声明要求来源文本:原文中与声明要求相关的**所有**引文的列表。
+
+将每个声明要求的格式设置为 (<subject_entity>{tuple_delimiter} <object_entity>{tuple_delimiter} <claim_type>{tuple_delimiter} <claim_status>{tuple_delimiter} <claim_start_date>{tuple_delimiter} <claim_end_date>{tuple_delimiter} <claim_description>{tuple_delimiter} <claim_source>)
+
+3. 返回列表，其中包含步骤 1 和 2 中确定的所有声明要求。使用 **{record_delimiter}** 作为列表分隔符。
+
+4. 完成后，输出 {completion_delimiter}
+```
+
+### 3. Entities & Relationships → Knowledge Graph
+
+**这一步就是知识图谱的构建 —— 即图元素与协变量的汇总**。前一步对于实体/关系以及其他协变量的提取是逐块进行的，而如果一个实体/关系在多个块中出现，在处理整个文档时，就会被提取多次。而知识图谱生成需要把提取到的：
+
+- 同一个**实体**汇总成一个 **node**
+- 同一个**关系**汇总成一条 **edge**，而关系出现的次数则作为 edge 的权重
+- 实体和关系的**描述**合并总结成最终的描述
+- **声明**合并总结成最终的声明
+
+**实体的识别**：精确字符串匹配，即”孙悟空”和“齐天大圣”会被识别为两个实体。但是在聚类的时候会自动聚集到一起，自带鲁棒性。
+
+### 4. Knowledge Graph → Graph Communities
+
+这个阶段使用 leiden（莱顿）社区发现算法进行社区划分，但GraphRAG会通过控制粒度的递归，实现多层级社区的划分：
+
+1. 首次运行（粗粒度）：对整个知识图谱应用Leiden算法，通过设定较高的分辨率参数（resolution parameter），使算法倾向于生成较大的社区（即顶级社区，如“人工智能技术”或“医疗风险”）。此时社区数量较少，覆盖全局节点。
+2. 递归调用（细粒度）：对每个顶级社区单独再次运行Leiden算法，并逐步降低分辨率参数。这相当于在子图上细化划分，生成更小的子社区。重复此过程直到满足终止条件（如社区无法进一步分割或达到预设层级深度）。
+
+
+
+### 5. Graph Communities → Community Summaries
+
+这一步对多层级社区逐层生成**社区摘要**：
+
+- 作为一个独立有效的信息来源，可以在全局层面上帮助理解数据集的结构和语义
+- 用于回答 global queries
+- 使用场景：用户从上往下逐层查看社区摘要，看到某个感兴趣的社区时，进入到这个社区的下层查看其子社区的摘要。从而从多层级社区中获取足够用于回答 global queries 的信息。
+
+#### 如何逐层摘要
+
+**GraphRAG通过将各类元素摘要（节点、边及相关声明）填充到社区摘要模板中生成社区摘要：**
+
+- **叶子级社区**：
+  - 对社区中的关系排序，从前往后依次将 **边描述、源节点描述、目标节点描述、及相关声明** 添加到LLM上下文窗口，直到达到Token上限。
+  - 边的排序规则：按边的整体重要性降序排列，整体重要性即边的源节点与目标节点的度数之和
+- **更高级社区**：
+  - 若所有元素摘要未超出Token限制，则按叶子级社区方式处理；
+  - 若超出限制，则按子社区摘要的Token量降序排列，逐步用子社区摘要（较短）替换其关联的元素摘要（较长），直到适配Token容量。
+
+#### 提示词（节选）
+
+**community_report.py：**
+
+````markdown
+报告应包括以下部分:
+
+- title: 代表其关键实体的社区名称，标题应简短但具体。如果可能，请在标题中包含代表性命名实体。
+- summary: 社区整体结构的执行摘要，其实体如何相互关联，以及与其实体相关的重要信息。
+- rating: 0-10 之间的浮动分数，表示社区内实体造成的影响的严重程度。影响是社区的重要性得分。
+- rating_explanation: 用一句话解释影响严重程度评级。
+- findings: 列出 5-10 个关于社区的关键见解。每个见解都应有一个简短的摘要，然后根据以下基本规则附上多段解释性文字。内容要全面。
+
+将输出返回为格式正确的 JSON 格式字符串，格式如下:
+```json
+{{
+    "title": <report_title>,
+    "summary": <executive_summary>,
+    "rating": <impact_severity_rating>,
+    "rating_explanation": <rating_explanation>,
+    "findings": [
+        {{
+            "summary":<insight_1_summary>,
+            "explanation": <insight_1_explanation>
+        }},
+        {{
+            "summary":<insight_2_summary>,
+            "explanation": <insight_2_explanation>
+        }}
+    ]
+}}
+```
+````
+
+
+
+## Query 阶段
+
+### 1. 确定社区层级
+
+GraphRAG会直接利用社区摘要来回答用户的全局查询，而这就首先涉及到确定一个社区的层级。社区层级越高，社区涵盖的内容就越广，回答可能就更全面。而社区层级越低，社区中包含的细节信息就更多，回答则更具体。
+
+### 2. 社区摘要准备
+
+随机打乱社区摘要，对打乱后的所有的社区摘要进行文本分块操作（按照预设大小）
+
+（This ensures relevant information is distributed across chunks, rather than concentrated (and potentially lost) in a single context window.）
+
+### 3. Map
+
+把每个社区摘要块填入 LLM 提示词中，让 LLM 分别以每个社区摘要块作为背景信息来回答一次用户问题。同时让 LLM 对每个回答的有用程度给出一个评分。（0分回答会被过滤掉）
+
+#### 提示词（节选）
+
+**global_search_map_system_prompt.py：**
+
+````markdown
+---目标---
+
+生成一个回答，其中包含响应用户问题的关键点列表，总结输入数据表中的所有相关信息，至少生成5个关键点。
+您应该使用下面数据表中提供的数据作为生成回答的主要上下文。
+如果您不知道答案，或者输入数据表没有包含足够的信息来提供答案，请直接说不知道。不要编造任何东西。
+回答中的每个关键点都应包含以下元素:
+- 描述: 对该点的全面描述。
+- 重要性分数: 0-100 之间的整数分数，表示该点在回答用户问题方面的重要性。"我不知道" 类型的回答得分为 0。
+
+回答应采用 JSON 格式，如下所示:
+```json
+{{
+    "points": [
+        {{"description": "要点 1 的描述 [数据: 报告(报告 ID)]", "score": score_value}},
+        {{"description": "要点 2 的描述 [数据: 报告(报告 ID)]", "score": score_value}}
+    ]
+}}
+```
+````
+
+### 4. Reduce
+
+对上一步获得回答按照评分降序排列，在不超过LLM上下文长度的情况下，选取尽量多的回答填入 LLM 提示词。被选取到的回答就作为用于生成最终回答的上下文信息。
+
+#### 提示词（节选）
+
+**global_search_reduce_system_prompt.py：**
+
+```markdown
+---角色---
+
+您是一位智能助手，通过综合多位分析师的观点来回答有关数据集合的问题。
+
+---目标---
+
+生成目标长度和格式的回答，以响应用户的问题，总结多位分析师对数据集合不同部分的所有报告。
+请注意，下面提供的分析师报告按 **重要性降序排列** 。
+如果您不知道答案，或者提供的报告不包含足够的信息来提供答案，请直接说不知道。不要编造任何东西。
+最终的回答应从分析师的报告中删除所有不相关的信息，并将清理后的信息合并为一个全面的答案，该答案提供适合回答长度和格式的所有关键点和含义的解释。
+
+
+...略...
+
+
+---目标回答长度和格式---
+
+{response_type}
+
+---分析师报告---
+
+{report_data}
+```
+
+### 
+
+## 提示词微调（index 阶段）
+
+为了提升 index 阶段提示词的效果，非常建议在原有提示词中添加一些与输入语料相关的 few shot 例子，这对于提升 LLM 提取知识图谱的质量非常有帮助。
+
+- Auto Tuning：https://microsoft.github.io/graphrag/prompt_tuning/auto_prompt_tuning/
+- Manual Tuning： 手动指定提示词替换原提示词，只需要符合提示词模板格式即可
+
+![Figure 1: Auto Tuning Conceptual Diagram.](../images/auto-tune-diagram.png)
+
 
 
 ## 实体归一化
@@ -163,7 +380,7 @@ Leiden算法在处理**大规模图数据和高密度社群**时更具优势，�
 ---
 
 ### **翻译**  
-"在本研究中，我们的分析采用**精确字符串匹配**进行实体匹配——即统一同一实体的不同名称的任务（引用文献略）。然而，通过少量调整提示词或代码，也可采用更灵活的匹配方法。此外，GraphRAG对重复实体具有较强鲁棒性，因为重复实体通常会在后续步骤中被聚类并用于摘要生成。"
+"在本研究中，我们的分析采用**精确字符串匹配**进行实体匹配——即统一同一实体的不同名称的任务。然而，通过少量调整提示词或代码，也可采用更灵活的匹配方法。此外，GraphRAG对重复实体具有较强鲁棒性，因为重复实体通常会在后续步骤中被聚类并用于摘要生成。"
 
 ---
 
@@ -200,37 +417,78 @@ Leiden算法在处理**大规模图数据和高密度社群**时更具优势，�
 
 
 
-# to-do
+## 评估
 
-- benchmark：如何评估rag应用（成本、构建难度、查询速度、查询准确性、占用内存、数据库大小）
+目前没有比较好的用于测试RAG系统回答 global queries 的能力的方法。GraphRAG的思路就是让 LLM 自己生成 global queries，然后再从多个维度来评估 RAG 系统的回答质量。
+
+### 问题的生成
+
+要求 LLM 针对输入的语料识别 K ( = 5 ) 个潜在用户，每个用户  N ( = 5 )  个任务，为了完成任务需要提出 M ( = 5 ) 个问题。
+
+因此，对于一个数据集，需要 LLM 提出 125 个全局问题，并评估 RAG 系统的回答质量。
+
+### 数据集
+
+Chunk Size : 600 - 100overlap
+
+![image-20250322215647435](../images/image-20250322215647435.png)
+
+### 实验条件（conditions）
+
+1. C0. Uses root-level community summaries (fewest in number) to answer user queries.
+2. C1. Uses high-level community summaries to answer queries. These are sub-communities of C0, if present, otherwise C0 communities projected downwards.
+3. C2. Uses intermediate-level community summaries to answer queries. These are sub-communities of C1, if present, otherwise C1 communities projected downwards.
+4. C3. Uses low-level community summaries (greatest in number) to answer queries. Theseare sub-communities of C2, if present, otherwise C2 communities projected downwards.
+5. TS. The same method as in Section 3.1.6, except source texts (rather than community summaries) are shuffled and chunked for the map-reduce summarization stages.
+6. SS. An implementation of vector RAG in which text chunks are retrieved and added to theavailable context window until the specified token limit is reached.
+
+### 评价指标（Metrics)
+
+**Comprehensiveness**：衡量答案对查询相关主题的覆盖广度，即是否包含所有关键信息点，避免遗漏重要细节。通过每个回答中平均可以提取到的 claim 数量衡量。
+
+**Diversity**：评估答案的丰富性和多角度性，避免重复或单一视角的陈述。通过每个回答中的 claims 聚类的数量衡量。
+
+**Empowerment**：反映答案对用户决策的实际支持能力，即是否提供可操作建议或深度洞见。通过用户调查或任务完成率（如基于答案能否指导正确操作）衡量。
+
+**Directness**：衡量答案与查询意图的匹配精度，避免冗余或偏离主题的内容。这个指标主要是为了突出朴素RAG对于GraphRAG具有更高的直接性。
+
+### 实验方式
+
+针对某个指标，为 LLM 提供问题和（来自不同condition的）一对答案，让 LLM 评价哪个 condition 的答案更好。为避免 LLM 的随机性，此过程进行 5 次取平均值。问完所有问题后，得到某个指标下的某个 condition 对另一个 condition 的胜率。
+
+### 实验结果
+
+总体而言：
+
+- Comprehensiveness 和 Diversity ：GraphRAG压倒性胜过朴素RAG
+- Directness ：朴素RAG 优于 GraphRAG
+- Empowerment：互有胜负（provide specific examples, quotes, and citations was judged to be key to helping users reach an informed understanding. Tuning element extraction prompts may help to retain more of these details in the GraphRAG index.）
+
+![image-20250322223125558](../images/image-20250322223125558.png)
+
+#### token消耗
+
+![image-20250322224649514](../images/image-20250322224649514.png)
+
+#### 上下文长度的选择
+
+上下文窗口长度对特定任务的影响尚不明确，尤其是对于像GPT-4 Turbo（支持128k Token长上下文）这类大模型。由于长上下文可能导致信息“在中间位置丢失”（Kuratov et al., 2024; Liu et al., 2023），我们尝试探索不同上下文窗口长度对数据集、问题和评估指标的影响。具体目标是确定基线条件（SS）的最优窗口长度，并将其统一用于所有查询阶段的LLM调用。为此，我们测试了四种窗口长度：8k、16k、32k和64k。
+
+**关键发现**：
+
+- **全面性（Comprehensiveness）**：最小的8k窗口在全面性指标上表现最佳（平均胜率58.1%）。
+- **多样性（Diversity）与授权性（Empowerment）**：8k窗口与更大窗口表现相当（平均胜率分别为52.4%和51.3%）。
+  最终选择固定8k窗口进行最终评估，以优先保障答案的全面性与多样性。
 
 
 
+### 实体提取时的Self-Reflection（一个提示词工程技术）
 
-
-## 中文优化
-
-### 提示词翻译
-
-使用gpt-4o翻译：
-
-```
-下面我会把graphrag用到的官方英文提示词发给你，我想要你帮我把它们翻译成中文。
-
-注意：
-1. 你翻译时应该考虑到这是要用来graphrag的提示词，需要能够很好得用于实体提取、社区报告生成等目的。
-2. 原提示词中如果有类似“以英文输出结果”的表述，需要注意修改成类似“以中文输出结果”。最终结果就是我需要得到一个中文的知识图谱。
-3. 输出内容限定：除了翻译的结果不需要输出其他内容（除非翻译的过程中你有不确定的问题需要问我），你的输出结果需要能够直接被复制粘贴来替换原有提示词。
-4. 如果内容过长，你不能一次性输出完，你可以分两次输出，但是绝不能自行压缩提示词内容。
-5. 你的输出内容的风格应该和原提示词的风格保持一致，不应该私自添加原文本中没有的markdown标记。
-
-下面是原提示词：
-
-```
+![image-20250322225733684](../images/image-20250322225733684.png)
 
 
 
-## ollama相关
+# ollama相关
 
 ### 修改提示词长度上限（默认2048）
 
@@ -375,30 +633,3 @@ export OLLAMA_GPU_OVERHEAD="100000000" # 预留 100MB 显存
 通过合理配置这些环境变量，你可以更好地控制和优化 Ollama 服务的运行。
 
 
-
-## index 建立索引
-
-```
-🚀 LLM Config Params Validated
-🚀 Embedding LLM Config Params Validated                                                                                                                                  
-Running standard indexing.                                                                                                                                                
-
-```
-
-### 1. 文件处理（分块）
-
-- 🚀 create_base_text_units 
-- 🚀 create_final_documents
-
-![image-20250315183605074](../images/image-20250315183605074.png)
-
-![image-20250315183849745](../images/image-20250315183849745.png)
-
-### 2. 图结构提取
-
-🚀 extract_graph
-
-- entities
-- relationships
-
-![image-20250315184054066](../images/image-20250315184054066.png)
