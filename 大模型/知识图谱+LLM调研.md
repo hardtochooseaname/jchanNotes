@@ -82,9 +82,7 @@
 
 
 
-## 3. 相关技术
-
-### KAPING（基于三元组的提示词增强）
+## KAPING（基于三元组的提示词增强）
 
 **核心思路**：
 
@@ -105,7 +103,9 @@
    Below are facts in the form of triples meaningful to answer the question: [...]
    ```
 
-### Think on Graph（ToG）
+
+
+## Think on Graph（ToG）
 
 ![image-20250402091635558](../images/image-20250402091635558.png)
 
