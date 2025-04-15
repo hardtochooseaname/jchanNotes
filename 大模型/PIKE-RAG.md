@@ -4,7 +4,7 @@
 
 1. **事实性问题 (Factual Questions)**
    - **定义**：这类问题要求获取原始语料中明确呈现的具体信息。答案往往直接可从数据中检索到。
-   - **特点**：文本中有明确的事实陈述，利用文本的原文片段即可得到答案，无需跨文档推理。
+   - **所需能力**：直接从文档中提取明确信息。
    - **举例**：查询某产品的发布日期、某公司总部的位置等。
 
 2. **链接推理问题 (Linkable-Reasoning Questions)**
@@ -12,19 +12,19 @@
    - **子分类**：
      - **桥接问题 (Bridging Questions)**：通过依次“桥接”多个实体来形成答案（跨多个实体的联系）。
      - **比较问题 (Comparative Questions)**：关注对两个或多个实体的指定属性进行比较。
-     - **定量问题 (Quantitative Questions)**：需要对检索到的数据进行统计分析，如数量总和、平均值等。
+     - **数量问题 (Quantitative Questions)**：需要对检索到的数据进行统计分析，如数量总和、平均值等。
      - **摘要问题 (Summarizing Questions)**：要求从多个文本或信息源中提取并综合出一个简明、连贯的摘要。
-   - **特点**：解决这类问题通常需要中间处理步骤（如统计聚合或信息整合），使得查询不仅仅依赖单一文本源。
+   - **所需能力**：跨文档检索、信息整合、多步推理。
 
 3. **预测问题 (Predictive Questions)**
    - **定义**：这类问题的答案不直接存在于原始文本中，而是需要基于已有事实进行归纳和预测。预测问题要求模型能够从数据中提取模式，并据此推测未来可能的趋势或结果。
-   - **特点**：答案通常具有不唯一性，反映了预测任务本身的不确定性；需要组织和结构化相关数据（例如生成时间序列）以便进行预测。
+   - **所需能力**：需要组织和结构化相关数据（例如生成时间序列）以便进行预测，归纳推理、预测。
    - **举例**：预测未来某一产品的市场走势或某项政策对经济的影响。
 
 4. **创造性问题 (Creative Questions)**
    - **定义**：创造性问题要求从专业知识库中挖掘出有价值的、领域特定的逻辑，并引入创新的视角来改善现有解决方案。回答此类问题不仅依赖于事实信息，也要求具备创造性思维。
-   - **特点**：回答的目标是启发LLM产生新的见解，而不是给出现成的解决方案；通常需要组织和整合多个阶段的信息，并评估可能的影响和结果。
-   - **举例**：在特定技术领域中提出改进建议，或创新性地整合跨领域知识以开辟新的应用场景。
+   - **所需能力**：回答的目标是启发LLM产生新的见解，而不是给出现成的解决方案；通常需要组织和整合多个阶段的信息，并评估可能的影响和结果。
+   - **举例**：如何加速生物类似药在FDA的审批流程。
 
 ### **分类动态性**
 
@@ -52,6 +52,16 @@
 > - "PA" for file parsing, "KE" for knowledge extraction, "RT" for knowledge retrieval, "KO" for knowledge organization, and "KR" for knowledge-centric reasoning.
 > - 深色表示组件中添加了更高级的模块，对应系统架构图中的深色部分
 
+---
+
+<strong style="color: rgb(0, 150, 136);font-weight: bold;background-attachment: scroll;background-clip: border-box;background-color: rgba(0, 0, 0, 0);background-image: none;background-origin: padding-box;background-position-x: 0%;background-position-y: 0%;background-repeat: no-repeat;background-size: auto;width: auto;height: auto;margin-top: 0px;margin-bottom: 0px;margin-left: 0px;margin-right: 0px;padding-top: 0px;padding-bottom: 0px;padding-left: 0px;padding-right: 0px;border-top-style: none;border-bottom-style: none;border-left-style: none;border-right-style: none;border-top-width: 3px;border-bottom-width: 3px;border-left-width: 3px;border-right-width: 3px;border-top-color: rgba(0, 0, 0, 0.4);border-bottom-color: rgba(0, 0, 0, 0.4);border-left-color: rgba(0, 0, 0, 0.4);border-right-color: rgba(0, 0, 0, 0.4);border-top-left-radius: 0px;border-top-right-radius: 0px;border-bottom-right-radius: 0px;border-bottom-left-radius: 0px;"><span leaf="">风险管理</span></strong><span leaf="">：可以先实现基础功能，验证系统的可行性，然后再逐步添加更复杂的功能，降低开发风险。</span>
+
+<strong style="color: rgb(0, 150, 136);font-weight: bold;background-attachment: scroll;background-clip: border-box;background-color: rgba(0, 0, 0, 0);background-image: none;background-origin: padding-box;background-position-x: 0%;background-position-y: 0%;background-repeat: no-repeat;background-size: auto;width: auto;height: auto;margin-top: 0px;margin-bottom: 0px;margin-left: 0px;margin-right: 0px;padding-top: 0px;padding-bottom: 0px;padding-left: 0px;padding-right: 0px;border-top-style: none;border-bottom-style: none;border-left-style: none;border-right-style: none;border-top-width: 3px;border-bottom-width: 3px;border-left-width: 3px;border-right-width: 3px;border-top-color: rgba(0, 0, 0, 0.4);border-bottom-color: rgba(0, 0, 0, 0.4);border-left-color: rgba(0, 0, 0, 0.4);border-right-color: rgba(0, 0, 0, 0.4);border-top-left-radius: 0px;border-top-right-radius: 0px;border-bottom-right-radius: 0px;border-bottom-left-radius: 0px;"><span leaf="">资源优化</span></strong><span leaf="">：可以根据实际需求和资源情况，决定系统开发到哪个等级，避免资源浪费。</span>
+
+<strong style="color: rgb(0, 150, 136);font-weight: bold;background-attachment: scroll;background-clip: border-box;background-color: rgba(0, 0, 0, 0);background-image: none;background-origin: padding-box;background-position-x: 0%;background-position-y: 0%;background-repeat: no-repeat;background-size: auto;width: auto;height: auto;margin-top: 0px;margin-bottom: 0px;margin-left: 0px;margin-right: 0px;padding-top: 0px;padding-bottom: 0px;padding-left: 0px;padding-right: 0px;border-top-style: none;border-bottom-style: none;border-left-style: none;border-right-style: none;border-top-width: 3px;border-bottom-width: 3px;border-left-width: 3px;border-right-width: 3px;border-top-color: rgba(0, 0, 0, 0.4);border-bottom-color: rgba(0, 0, 0, 0.4);border-left-color: rgba(0, 0, 0, 0.4);border-right-color: rgba(0, 0, 0, 0.4);border-top-left-radius: 0px;border-top-right-radius: 0px;border-bottom-right-radius: 0px;border-bottom-left-radius: 0px;"><span leaf="">迭代优化</span></strong><span leaf="">：每个阶段都可以进行充分的测试和优化，确保系统的稳定性和性能。</span>
+
+<strong style="color: rgb(0, 150, 136);font-weight: bold;background-attachment: scroll;background-clip: border-box;background-color: rgba(0, 0, 0, 0);background-image: none;background-origin: padding-box;background-position-x: 0%;background-position-y: 0%;background-repeat: no-repeat;background-size: auto;width: auto;height: auto;margin-top: 0px;margin-bottom: 0px;margin-left: 0px;margin-right: 0px;padding-top: 0px;padding-bottom: 0px;padding-left: 0px;padding-right: 0px;border-top-style: none;border-bottom-style: none;border-left-style: none;border-right-style: none;border-top-width: 3px;border-bottom-width: 3px;border-left-width: 3px;border-right-width: 3px;border-top-color: rgba(0, 0, 0, 0.4);border-bottom-color: rgba(0, 0, 0, 0.4);border-left-color: rgba(0, 0, 0, 0.4);border-right-color: rgba(0, 0, 0, 0.4);border-top-left-radius: 0px;border-top-right-radius: 0px;border-bottom-right-radius: 0px;border-bottom-left-radius: 0px;"><span leaf="">灵活适配</span></strong><span leaf="">：不同的应用场景可能需要不同等级的系统能力，这种分级方法可以灵活适配各种需求。</span>
+
 ### 系统架构图
 
 ![image-20250414202029160](../images/image-20250414202029160.png)
@@ -61,3 +71,26 @@
 ## L0
 
 ![image-20250414212134680](../images/image-20250414212134680.png)
+
+## L1 - 事实性问题
+
+
+
+## L2 - 关联推理型问题
+
+## L3 - 预测型问题
+
+![image-20250415164153014](../images/image-20250415164153014.png)
+
+
+
+## L4 - 创新型问题
+
+![image-20250415164204584](../images/image-20250415164204584.png)
+
+L4 系统的实现特点在于整合了多代理系统，以促进多视角思考。
+
+- **功能需求**：应对创造性问题需要基于事实信息以及对底层原理和规则的理解进行创造性思考。
+- **主要挑战**：从检索到的知识中提取连贯的逻辑推理、应对涉及众多影响因素的复杂推理过程，以及评估对创造性、开放性问题回答的质量。
+- **具体实现**：系统通过协调多个代理，每个代理贡献独特的见解和推理策略。这些代理并行运行，综合各自的思维过程以生成全面且连贯的解决方案。
+- **实现效果**：多个代理的协调输出不仅丰富了推理过程，同时为用户提供了全面的视角，促进了创造性思考，并激发出解决复杂问题的新颖方案。
