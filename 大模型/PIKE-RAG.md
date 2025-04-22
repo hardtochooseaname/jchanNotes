@@ -12,7 +12,7 @@ s**P**ec**I**alized **K**nowledg**E** and **R**ationale **A**ugmented **G**enera
 
 ### Knowledge source diversity
 
-- 工业场景下RAG系统需要处理的数据会涉及到多种格式：like scanned images, digital text files, and web data, sometimes accompanied by special-ized databases
+- 工业场景下RAG系统需要处理的数据会涉及到多种格式：like scanned images, digital text files, and web data, sometimes accompanied by specialized databases
 - 现有的测试数据集则是较为简单的、结构化的语料，不能反应现实世界中数据的复杂性
 - 现存RAG方法也许在这些测试集上表现良好，但是也不能在工业场景下高效地提取专业知识、进行深层次的推理
 
@@ -63,17 +63,22 @@ PIKE-RAG认为拥有一个全面的知识库是在构建良好工业 RAG 应用�
 
 ### 问题分类的依据
 
-- **Relevance and Completeness of Knowledge**: The extent to which the necessary information is present within the knowledge base and how comprehensively it covers the topic.
-- **Complexity of Knowledge Extraction**: The difficulty in accurately identifying and retrieving all relevant pieces of knowledge, especially when scattered across multiple sources or implicitly embedded in the text.
-- **Depth of Understanding and Reasoning**: The level of cognitive and inferential processing required to comprehend the retrieved information, establish connections, and perform multi-step reasoning.
-- **Effectiveness of Knowledge Utilization**: The sophistication involved in applying the extracted knowledge to formulate responses, including synthesizing, organizing, and generating insights or predictions.
+1. **知识的相关性和完整性**：所需信息在知识库中的存在程度和覆盖范围
+2. **知识提取的复杂性**：准确识别和检索所有相关知识片段的难度
+3. **理解和推理的深度**：理解检索信息、建立连接和执行多步推理所需的认知水平和推理能力
+4. **知识利用的有效性**：应用提取知识来制定回答的复杂程度，这需要能够整合知识、组织知识、生成洞见和预测
+
+> - **Relevance and Completeness of Knowledge**: The extent to which the necessary information is present within the knowledge base and how comprehensively it covers the topic.
+> - **Complexity of Knowledge Extraction**: The difficulty in accurately identifying and retrieving all relevant pieces of knowledge, especially when scattered across multiple sources or implicitly embedded in the text.
+> - **Depth of Understanding and Reasoning**: The level of cognitive and inferential processing required to comprehend the retrieved information, establish connections, and perform multi-step reasoning.
+> - **Effectiveness of Knowledge Utilization**: The sophistication involved in applying the extracted knowledge to formulate responses, including synthesizing, organizing, and generating insights or predictions.
 
 ### 四种问题类型
 
 | 问题类型                                        | 定义                                                         | 所需能力                              | 示例问题                                       | 推理路径                   |
 | ----------------------------------------------- | ------------------------------------------------------------ | ------------------------------------- | ---------------------------------------------- | -------------------------- |
 | **事实性问题 (Factual Questions)**              | 这类问题要求获取原始语料中明确呈现的具体信息。答案往往直接可从数据中检索到。 | 直接从文档中提取明确信息。            | 苹果公司第一款 iPhone 的发布日期是什么？       | 检索单条信息               |
-| **链接推理问题 (Linkable‑Reasoning Questions)** | 这类问题需要从多个来源中提取相关信息或经过多步推理才能得出答案。答案可能在不同文档中隐含分布，需要整合多部分信息。 | 跨文档检索、信息整合、多步推理。      | 比较特斯拉和丰田在 2022 年的全球销量哪个更高？ | 检索多条信息+比较分析      |
+| **关联推理问题 (Linkable‑Reasoning Questions)** | 这类问题需要从多个来源中提取相关信息或经过多步推理才能得出答案。答案可能在不同文档中隐含分布，需要整合多部分信息。 | 跨文档检索、信息整合、多步推理。      | 比较特斯拉和丰田在 2022 年的全球销量哪个更高？ | 检索多条信息+比较分析      |
 | **预测问题 (Predictive Questions)**             | 这类问题的答案不直接存在于原始文本中，而是需要基于已有事实进行归纳和预测。预测问题要求模型能够从数据中提取模式，并据此推测未来可能的趋势或结果。 | 归纳推理、数据分析、预测。            | 预计未来三年全球电动汽车保有量将增长多少？     | 检索多条信息+统计分析+预测 |
 | **创造性问题 (Creative Questions)**             | 创造性问题要求从专业知识库中挖掘出有价值的、领域特定的逻辑，并引入创新的视角来改善现有解决方案。回答此类问题不仅依赖于事实信息，也要求具备创造性思维。 | LLM多角度创造性思考、综合多阶段信息。 | 如何设计一种低成本、家用且零碳排放的暖气系统？ | 多agent+复杂检索+复杂推理  |
 
