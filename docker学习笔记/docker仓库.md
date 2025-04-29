@@ -7,9 +7,8 @@
 
 # 本脚本需要以root权限运行
 
-# 定义镜像加速地址列表（截止到2024/8/28，下面三个镜像加速都是可用的）
+# 定义镜像加速地址列表（截止到2025/84/28，下面镜像加速都是可用的）
 mirrors=(
-    "https://docker.chenby.cn"
     "https://docker.m.daocloud.io"
     "https://docker.nju.edu.cn"
 )
