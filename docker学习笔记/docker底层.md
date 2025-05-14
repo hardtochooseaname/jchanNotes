@@ -316,7 +316,7 @@ lrwxrwxrwx 1 systemd-coredump systemd-coredump 0 May  1 09:43 uts -> 'uts:[40265
 
 ---
 
-### 具体实验
+### go程序实验
 
 https://www.lixueduan.com/posts/docker/05-namespace/#uts-namespace
 
@@ -437,7 +437,7 @@ mount -t cgroup -o memory cgroup /sys/fs/cgroup/memory
 
 ![image-20250502190028060](../images/image-20250502190028060.png)
 
-## 内核如何知道进程有哪些资源限制？
+## 进程如何关联到cgroup系统
 
 - cgroup 一共有12种subsystem，也就是说有12种可以限制的系统资源
 
@@ -489,7 +489,7 @@ css_set struct {
 
 ## 如何使用 Cgroups
 
-### 查看cgroup文件系统挂载点
+### 1. 查看cgroup文件系统挂载点
 
 cgroup 相关的所有操作都是基于内核中的 cgroup virtual filesystem，使用 cgroup 很简单，挂载这个文件系统就可以了。
 
@@ -523,7 +523,10 @@ cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,fr
 
 挂载到`/sys/fs/cgroup`下的是 **hierarchy**，而 hierarchy  通常会与一个或多个 **subsystem** 绑定，同时一个 hierarchy 下会以树状结构组织若干的 **cgroup**
 
-### 查看系统当前cgroup子系统状态
+### 2. 查看系统当前cgroup子系统状态
+
+- 可以看到有哪些子系统
+- 每个子系统有多少hierarchy、多少cgroup
 
 ```sh
 root@czw-ai-247:/home# cat /proc/cgroups 
@@ -542,6 +545,478 @@ hugetlb         8            3              1
 pids            2            109            1
 rdma            6            3              1
 ```
+
+### 3. cgroup的创建与删除
+
+- 创建 cgroup 比较简单，直接在 hierarchy 或 cgroup 目录下创建子目录（mkdir）即可
+
+- 删除则是删除对应**目录**（rmdir）
+  - 注意不能通过`rm -rf`来删除，因为目录中的文件是虚拟的，递归删除时会报错
+  - 也不能`rm -d`来删除，因为这是删除空目录，而cgroup的目录非空
+  - 但是**可以用`rmdir`直接删除**
+
+#### cgroup工具
+
+- `cgdelete controllers:path`： path可以用相对路径或者绝对路径
+  - 删除之前要确保其中没有进程，不然会删除失败
+
+```sh
+# 安装cgroup工具
+apt-get install cgroup-tools
+
+# 删除实验
+root@czw-ai-247:/sys/fs/cgroup/memory# ll | grep mycg
+drwxr-xr-x  2 root root   0 May  3 03:43 mycg/
+root@czw-ai-247:/sys/fs/cgroup/memory# cgdelete memory:mycg
+root@czw-ai-247:/sys/fs/cgroup/memory# ll | grep mycg
+```
+
+### 4. hierarchy 的创建与删除
+
+```sh
+# 创建一个目录用作挂载点
+mkdir /path/to/dir
+# 挂载 - 类型为cgroup的fs - 关联到subsystem控制器 - 子系统实例/hierarchy的名字 - fs的挂载点
+mount       -t cgroup       -o <subsystem>            name             /path/to/dir
+# 删除
+umount /path/to/dir
+```
+
+### 5. 把进程加入 cgroup（✨核心✨）
+
+1. 首先，Linux系统中的所有进程都必须属于每个子系统树中的某个节点
+   - 因为任何进程创建时都会自动加入到其父进程所在的 cgroup
+   - 所以只要 Linux 上第一个运行的进程在 cgroup 中，那么后面所有进程都在 cgroup 中
+2. 其次，通常我们说的把”进程加入某个 cgroup 中“
+   - 这意思不是说进程原来不受 cgroup 管理，现在要把它加入某个 cgroup 来管理的意思
+   - 而是每次把进程写进`cgroup.procs/tasks`的操作，在背后都伴随着一个将进程从原 cgroup 中移除的操作
+   - 其实对 cgroup 文件的读写操作，本质上也就是 cgroup 通过虚拟文件系统暴露出来的操作接口罢了
+3. 另外，cgroup 是内核带有强制性的对进程资源进行管理的手段，任何进程都不能不受管理、退出 cgroup
+   - 即使你想让某个进程不再受到任何 cgroup 的限制，你也需要将其移动到根 cgroup（对于每个子系统层级来说），根 cgroup 通常没有施加任何限制
+
+
+
+## 实验
+
+### pids
+
+通过下面两个关键文件，可以限制进程组中的进程数目：
+
+- pids.current: 表示当前 cgroup 及其**所有子孙 cgroup** 中现有的总的进程数量
+- pids.max: 当前 cgroup 及其所有子孙 cgroup 中所允许创建的总的最大进程数量
+
+> 重点：”子孙“两个字，数值表示的是整颗（子）树的进程数目
+>
+> 所以：
+>
+> - 子孙 cgroup 中的进程会增加祖先 cgroup 中的 pids.current 值
+> - 子孙 cgroup 中的最大进程数也受到祖先 cgroup 的 pids.max 限制
+
+#### 有没有可能 pids.current > pids.max ？
+
+并不是所有情况下都是 pids.max >= pids.current，在下面两种情况下，会出现 pids.max < pids.current 的情况：
+
+- 手动把 pids.max 的值修改得比 pids.current 小
+- 将其他进程加入到当前 cgroup 或者子孙 cgroup 有可能会导致 pids.current > pids.max
+  - 因为 pids.max 只会在当前 cgroup 中的进程 fork、clone 的时候生效，将其他进程加入到当前 cgroup 时，不会检测 pids.max，所以可能触发这种情况
+
+---
+
+### cpu
+
+当你在同一个 cgroup v1 中同时设置了 `cpu.cfs_period_us` 和 `cpu.cfs_quota_us` (用于 **CFS 调度器**的带宽限制) 以及 `cpu.shares` (用于 **Shares 调度器**的相对权重) 时，**它们会一起生效，但影响进程调度的机制和优先级不同。**
+
+> 这两个调度器都是 Linux 内核中用于负责 cpu 调度的调度器
+
+**1. CFS调度器硬性限制**：两个文件配合起来设置CPU的使用上限，两个文件的单位都是微秒（us）：
+
+- cfs_period_us：用来配置时间周期长度
+  - 取值范围为1毫秒（ms）到1秒（s）
+  - 默认值 100000，如果 cfs_quota_us  = 50000，那么就是限制最多 50% 的 cpu 占用
+- cfs_quota_us：用来配置当前cgroup在设置的周期长度内所能使用的CPU时间数
+  - 取值大于1ms即可
+  - 默认值为 -1，表示不受cpu时间的限制。
+
+ **2. Shares 调度器软性限制**：通过文件来设置 cpu 使用的相对份额限制，来达成相对限制（shares可以理解为股票份额，股票越多，分成越多）
+
+- **cpu.shares** 用来设置 CPU 的相对份额，默认 1024
+  - 如果 10 个进程都是 1024 且都在运行，那么每个进程最多 10%
+  - 如果 5个进程运行，那么每个进程最多20%
+
+---
+
+### memory
+
+> 内存这一块细节较多，详情参见 https://www.lixueduan.com/posts/docker/07-cgroups-2/#3-memory
+
+**主要文件及解释**
+
+```shell
+ cgroup.event_control       #用于eventfd的接口
+ memory.usage_in_bytes      #显示当前已用的内存
+ memory.limit_in_bytes      #设置/显示当前限制的内存额度
+ memory.failcnt             #显示内存使用量达到限制值的次数
+ memory.max_usage_in_bytes  #历史内存最大使用量
+ memory.soft_limit_in_bytes #设置/显示当前限制的内存软额度
+ memory.stat                #显示当前cgroup的内存使用情况
+ memory.use_hierarchy       #设置/显示是否将子cgroup的内存使用情况统计到当前cgroup里面
+ memory.force_empty         #触发系统立即尽可能的回收当前cgroup中可以回收的内存
+ memory.pressure_level      #设置内存压力的通知事件，配合cgroup.event_control一起使用
+ memory.swappiness          #设置和显示当前的swappiness
+ memory.move_charge_at_immigrate #设置当进程移动到其他cgroup中时，它所占用的内存是否也随着移动过去
+ memory.oom_control         #设置/显示oom controls相关的配置
+ memory.numa_stat           #显示numa相关的内存
+```
+
+#### 主要用法
+
+- 1）`memory.limit_in_bytes` 配置进程可以使用的内存上限(hard limit)，当超过该阈值时，一般是尝试使用 swap（通常系统关闭了swap空间），如果不行则直接 kill 掉。
+- 2）`memory.soft_limit_in_bytes` 配置进程可以使用的内存上行(soft limit)，当系统内存不足时，cgroups 会优先将使用量超过 soft limit 的进程进行内存回收，腾出内存。
+- 3）`memory.oom_control` 参数配置内存使用量到达阈值时内核的处理行为，默认为 oom_kill。
+
+原理：当进程使用内存超过`memory.limit_in_bytes` 之后，系统会根据 `memory.oom_control` 配置的行为进行处理，一般是尝试使用 swap，如果不行则直接 kill 掉。
+
+#### 内存限制行为解释
+
+- 如果一个进程在加入cgroup之前已经分配有一定的内存，那么在把它加入cgroup后，cgroup不会计算加入时进程以及占用的内存
+- 只有在进程加入cgroup后，新分配的内存会被 cgroup 计算，并在超出限制后触发 OOM
+
+**具体可见实验：**
+
+- 限制 50M
+- 进程首先分配 100 M 再加入 cgroup
+- 然后每次回车分配 10M，第五次尝试分配时 OOM
+
+![image-20250506224942524](../images/image-20250506224942524.png)
+
+
+
+
+
+# UFS - 联合文件系统
+
+## 技术演变
+
+## 1. AUFS（Another Union File System）
+
+- 是较早的 UnionFS 实现；
+- Docker 初期默认使用 AUFS；
+- 曾不被主线内核接受（长期依赖 patch）；
+- 现在已基本被淘汰。
+
+#### 特点：
+
+| 特性               | 描述                           |
+| ------------------ | ------------------------------ |
+| 多层合并           | 支持合并多个只读层和一个可写层 |
+| 写时复制（CoW）    | 修改文件会拷贝到写层           |
+| 支持 whiteout 文件 | 用于“删除”只读层里的文件       |
+| 复杂、性能较好     | 性能比 OverlayFS 略优          |
+
+#### 缺点：
+
+- **不在主线内核**（要打 patch，维护成本高）；
+- **兼容性差**（只有 Ubuntu 某些内核有支持）；
+- Docker 早期在 Ubuntu 上默认用它，但现在已经不推荐。
+
+------
+
+### 2. OverlayFS（overlay2）
+
+- 是 Linux 主线内核从 3.18 开始合并的新一代 UnionFS；
+- Docker 1.10+ 默认使用 OverlayFS（特别是 overlay2 驱动）；
+- 简单、性能优良、内核原生支持。
+
+#### 组成：
+
+OverlayFS 有两个主要层：
+
+- `lowerdir`: 只读层（多个镜像层合并）
+- `upperdir`: 可写层（容器运行时写入）
+- `workdir`: 操作中间层（技术细节）
+
+挂载命令示例：
+
+```
+bashCopyEditmount -t overlay overlay \
+  -o lowerdir=/layers/image,upperdir=/container/changes,workdir=/container/work \
+  /merged
+```
+
+#### 特点：
+
+| 特性                 | 描述                                      |
+| -------------------- | ----------------------------------------- |
+| 原生支持（主线内核） | 无需打 patch，直接用                      |
+| 支持两层合并         | 不支持多个 lowerdir（但 overlay2 弥补了） |
+| 现代 Linux 支持良好  | Docker 默认支持                           |
+| 写性能高，读性能优   | 避免多余拷贝                              |
+
+---
+
+### 🤔 AUFS 为什么被 Docker 淘汰？
+
+#### 1. **不在主线内核（要打 patch，维护成本高）**
+
+“主线内核”指的是由 Linux 内核官方社区维护、发布的正式版本。
+
+- **AUFS 一直没有被合并进主线内核**。
+- 这意味着 Linux 官方不维护 AUFS，想用它的操作系统必须：
+  - 自己打 patch（打补丁），把 AUFS 加进内核源码；
+  - 或者用别人已经打好补丁的定制内核（例如 Ubuntu 某些版本）。
+
+#### 结果：
+
+- **麻烦**：每次内核升级都要重新打补丁；
+- **容易出问题**：AUFS 跟不上内核发展；
+- **维护成本高**：这对 Docker 官方和用户都很不友好。
+
+#### 2. **兼容性差（只有 Ubuntu 某些内核有支持）**
+
+因为 AUFS 不在主线内核，所以并不是所有 Linux 发行版都支持它。
+
+| 操作系统        | AUFS 支持情况         |
+| --------------- | --------------------- |
+| Ubuntu          | ✅ 某些版本内置了 AUFS |
+| Debian / CentOS | ❌ 默认没有            |
+| Arch / Fedora   | ❌ 没有支持            |
+
+- 如果你在非 Ubuntu 系统上用 Docker，Docker 会报错：找不到 AUFS 驱动。
+
+- AUFS 依赖于某些特定发行版的内核支持，**不能跨平台泛用**，这在容器技术里是致命的缺陷。
+
+
+
+## overlayFS 实验
+
+### 1. 准备环境
+
+- 两个源目录
+
+- 挂载点是merged目录
+
+- cow是upperdir，可读写层，联合文件系统的写操作都以写时复制的方式发生在这一层
+
+![image-20250513161447672](../images/image-20250513161447672.png)
+
+### 2. 执行mount命令
+
+注意，挂载overlay文件系统时，目录路径不支持使用相对路径，只能使用绝对路径
+
+```sh
+sudo mount -t overlay overlay \
+>   -o lowerdir=$(pwd)/lower1:$(pwd)/lower2,upperdir=$(pwd)/cow,workdir=$(pwd)/work \
+>   $(pwd)/merged
+```
+
+![image-20250513163148836](../images/image-20250513163148836.png)
+
+#### 命令解释
+
+ 第二个 `overlay`：伪设备名（source）
+
+这是挂载命令中的**源设备名（source）**，也就是：
+
+```sh
+mount -t fstype source target
+```
+
+OverlayFS （以及一些其他type的文件系统）不需要真实设备（不像 ext4 挂载磁盘分区），所以这里的 `source` 是个**占位符**，通常写成 `overlay`，但你其实写别的随便什么也可以，例如写`none`, `abcd`
+
+### 3. 实验 overlayFS 的工作原理
+
+| 目录名称     | 说明               | 特点与作用                                                   |
+| ------------ | ------------------ | ------------------------------------------------------------ |
+| **lowerdir** | 只读层（可以多个） | 原始的基础文件系统内容，主要用于提供联合文件系统的源数据。只读，不可修改。可以叠加多个，以冒号分隔。 |
+| **upperdir** | 可写层             | 写操作都会作用在此层。用户所有的写操作（删除和修改）最终都是反映到这里。 |
+| **workdir**  | 工作目录           | 内核使用的中间缓存目录，必须和 `upperdir` 同一个文件系统。用于处理写时复制等元数据。由内核创建和使用。 |
+| **merged**   | 挂载点             | **用户看到的合并视图**。OverlayFS 会将 `upperdir` 内容覆盖到 `lowerdir` 上后呈现出来。 |
+
+#### 读取：
+
+- 从 `upperdir` 中查找文件；
+- 若找不到，则向 `lowerdir` 查找。
+
+#### 写入（写时复制）：
+
+- 若写入的文件在 `lowerdir` 中：会复制到 `upperdir` 中后再写入（COW）；
+- 若写入的文件在 `upperdir` 中：直接修改；
+- 删除文件：OverlayFS 会在 `upperdir` 中创建 **whiteout 文件** 屏蔽 `lowerdir` 中的同名文件。
+
+#### ⚠️ 注意事项
+
+1. `upperdir` 和 `workdir` 必须在同一个文件系统中；
+2. `workdir` 必须是 **空目录**，挂载时必须存在；
+3. `lowerdir` 顺序决定优先级，**左边的优先级高**；
+4. 不能对 `merged` 做 `chroot` 挂载（不是设计目标）；
+5. 不支持将 `merged` 挂载成 `nfs` 等远程目录。
+
+
+
+## 【实验】Docker 如何使用 OverlayFS 分层存储
+
+### 一、实验内容与目的
+
+- **内容**：以构建一个简单的 Docker 镜像为例，深入剖析 Docker 在后台如何利用 OverlayFS 实现镜像分层存储与写时复制（Copy-on-Write）。
+- **目的**：
+  1. 了解 Docker 镜像层（layer）的元数据组织方式；
+  2. 掌握 DiffID、ChainID、cache-id 等关键 ID 的生成与关联流程；
+  3. 理解 OverlayFS 的 four-dir（lowerdir、upperdir、workdir、merged）原理及在容器运行时的具体作用；
+  4. 能够手动在 `/var/lib/docker` 下定位并验证某一镜像层的实际文件存储位置。
+
+------
+
+### 二、实验原理与前置知识
+
+#### 1. `/var/lib/docker/` 下的两个关键目录
+
+Docker 默认使用 `/var/lib/docker/` 作为其运行时的核心数据目录，其中包含了所有镜像、容器、卷、网络等组件的元数据和实际内容。本实验聚焦于以下两个子目录：
+
+**`image/`：镜像元数据目录**
+
+- docker 用来构建镜像的每一种 ufs 驱动都会在目录下有个子目录。现在基本都用 overlay2，因此一般会有`image/overlay2/`。
+
+- 用于存储 Docker 镜像的“**逻辑层信息**”（***镜像元数据***），包括各层的 ID（DiffID、ChainID）、层级结构、配置文件等。
+- 主要子目录包括：
+  - `imagedb/content/sha256/`：镜像 JSON 元数据，按镜像 ID 存储。
+  - `layerdb/sha256/`：镜像层的链式信息（ChainID → DiffID → cache-id）。
+  - `distribution/`：与镜像仓库同步相关的元信息（本实验不涉及）。
+
+这些信息用于描述“有哪些层”、“这些层如何组合成一个完整镜像”、“每层数据在哪个位置”。
+
+**`overlay2/`：镜像和容器实际文件系统目录**
+
+- 用于存储镜像层、容器写层的“**物理层内容**”（***镜像层的实际数据***），以 OverlayFS 的方式进行组合挂载。
+- 每一层对应一个唯一的子目录，其名称为该层的 `cache-id`，包含：
+  - `diff/`：该层的实际文件快照（可写或解压后的只读内容）。
+  - `merged/`：OverlayFS 的挂载点（容器运行时挂载该目录作为根文件系统）。
+  - `work/`：OverlayFS 的临时工作目录。
+  - `lower/`：指向父层内容的引用（有时为软链接或元数据，不一定为目录）。
+
+这部分提供了 Docker 镜像和容器运行时真正访问到的文件系统视图，是物理数据的存放地。
+
+#### 2. Docker 镜像元数据组织
+
+- **imagedb**
+  - 路径：`/var/lib/docker/image/overlay2/imagedb/content/sha256/`
+  - 每个文件名为镜像 ID 的 SHA256 校验串，内容为该镜像的 JSON 配置，包括：
+    - `rootfs.diff_ids`：镜像各层的 **DiffID** 列表（每层解压后文件内容的 SHA256）。
+    - 镜像创建命令、环境变量、基础镜像引用等。
+- **layerdb**
+  - 路径：`/var/lib/docker/image/overlay2/layerdb/sha256/`
+  - 每个目录名为一层的 **ChainID**（对前 N 层 DiffID 串联后再 SHA256）的校验串。
+  - 目录内文件：
+    - `cache-id`：指向真实数据存储目录（`/var/lib/docker/overlay2/<cache-id>`）。
+    - `diff`：本层的 DiffID（同 JSON 中的值）。
+    - `size`：层的大小。
+
+#### 3. 关键 ID 定义与作用
+
+| ID 类型      | 定义                                                         | 作用                                               |
+| ------------ | ------------------------------------------------------------ | -------------------------------------------------- |
+| **DiffID**   | 单层内容压缩包解压后文件系统的 SHA256 校验值                 | 唯一标识该层“新增或修改”后的文件快照               |
+| **ChainID**  | 对从最底层到本层所有 DiffID 按 `"sha256:ID1 sha256:ID2 ..."` 串联后再做 SHA256 | 唯一标识该层及其所有祖先层的组合，决定最终存储路径 |
+| **cache-id** | Docker 本地为该 ChainID 分配的实际存储目录名                 | 真实存放该层内容的目录（upperdir 或 diff）         |
+
+#### 4. OverlayFS 四个目录
+
+| 目录         | 角色       | 路径范例                                                     |
+| ------------ | ---------- | ------------------------------------------------------------ |
+| **lowerdir** | 只读层集合 | `/var/lib/docker/overlay2/<cache-id>/lower`                  |
+| **upperdir** | 可写层     | `/var/lib/docker/overlay2/<cache-id>/diff`                   |
+| **workdir**  | 工作目录   | `/var/lib/docker/overlay2/<cache-id>/work`                   |
+| **merged**   | 挂载点     | 容器运行时 Docker 在 `/var/lib/docker/overlay2/<cache-id>/merged` |
+
+写时复制时，OverlayFS 会在 `workdir` 中临时记录元数据，将 `lowerdir` 的文件拷贝到 `upperdir`，并在 `merged` 中呈现最终视图。
+
+------
+
+### 三、具体实验步骤与预期输出
+
+#### 步骤 1. 准备基础镜像并自定义构建
+
+```sh
+docker pull ubuntu:20.04
+cat <<EOF > Dockerfile
+FROM ubuntu:20.04
+RUN echo "Hello world" > /tmp/newfile
+EOF
+docker build -t hello-ubuntu .
+```
+
+> **预期**：构建成功，镜像列表中出现 `hello-ubuntu:latest`，大小约 72.8MB。
+
+#### 步骤 2. 查看镜像层历史
+
+```sh
+docker history hello-ubuntu
+```
+
+> **预期**：最顶层有一条 `echo "Hello world" > /tmp/newfile`，大小约 12B；下两层共享基础镜像。
+
+#### 步骤 3. 定位镜像元数据（imagedb）
+
+```sh
+cd /var/lib/docker/image/overlay2/imagedb/content/sha256
+# 找到新构建镜像的ID
+docker images 
+```
+
+打开对应文件，查看 `"rootfs":{"type":"layers","diff_ids":[ ... ]}`，记录其两个 DiffID。
+
+#### 步骤 4. 计算并定位 ChainID
+
+假设从 JSON 中拿到：
+
+> 从左到右是从下往上的一层层镜像内容的哈希值
+
+```sh
+diff_ids = ["sha256:9f54...","sha256:b3cc..."]
+```
+
+计算 ChainID 层层串联：
+
+```sh
+# 第一层 ChainID0 = DiffID0
+# 第二层 ChainID1 = sha256( "sha256:9f54... sha256:b3cc..." )
+echo -n ""sha256:9f54... sha256:b3cc..." | sha256sum| awk '{print $1}'
+```
+
+在 `layerdb/sha256/` 下找到名为该 ChainID1 的目录，进入查看 `cache-id`。
+
+#### 步骤 5. 查看实际文件层（overlay2/<cache-id>）
+
+```sh
+/var/lib/docker/overlay2/$(cat layerdb/.../cache-id)
+ls -R
+```
+
+- `diff/` 目录下应有 `tmp/newfile` 文件，内容为 `Hello world`。
+- `lower/` 目录包含该层继承的只读文件。
+- `work/` 目录为空（OverlayFS 专用，不用户操作）。
+- `merged/` 目录下呈现完整合并视图，可直接 `cat merged/tmp/newfile` 输出 `Hello world`。
+
+> **预期**：在 `merged` 路径下，查看 `/tmp/newfile` 内容为 `Hello world`。
+
+#### 步骤6. 找到容器运行时的MergedDir与UpperDir
+
+```sh
+docker run -it --rm <image-name>
+```
+
+![image-20250513184744414](../images/image-20250513184744414.png)
+
+
+
+
+
+
+
+
+
+
+
+
 
 # TO-LEARN
 
