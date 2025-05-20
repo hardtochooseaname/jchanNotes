@@ -62,6 +62,53 @@ tools = [
         }
     }
 ]
+
+# 工具定义
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "获取某个城市的实时天气",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "要查询天气的城市"
+                }
+            },
+            "required": ["location"]
+        }
+    }
+}]
+
+# 模型调用 & 工具调用指令生成
+response = client.chat.completions.create(
+    model="gpt-4-turbo",
+    messages=[{"role": "user", "content": "现在巴黎是什么天气？"}],
+    tools=tools
+)
+# {
+#   "tool_calls": [
+#     {
+#       "name": "get_weather",
+#       "arguments": {
+#         "location": "Paris"
+#       }
+#     }
+#   ]
+# }
+
+
+# 解析并执行 LLM 返回的工具调用指令
+tool_call = response.tool_calls[0]
+tool_name = tool_call["name"]
+tool_args = json.loads(tool_call["arguments"])
+if tool_name == "get_weather":
+    result = get_weather(**tool_args)
+    print("结果:", result)
+
+
 ```
 
 > **解释**：
