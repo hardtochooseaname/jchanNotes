@@ -7,7 +7,7 @@
 ```sh
 # 下载安装
 curl https://go.dev/dl/go1.24.0.linux-amd64.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.24.0.linux-amd64.tar.gz
 
 # go命令加入环境变量
 echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc
