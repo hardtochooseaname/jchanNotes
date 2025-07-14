@@ -9,6 +9,7 @@
 
 # 定义镜像加速地址列表（截止到2025/84/28，下面镜像加速都是可用的）
 mirrors=(
+	"https://xxxxxxx.mirror.aliyuncs.com" # 这个需要到这里查看 https://cr.console.aliyun.com/cn-chengdu/instances/mirrors
     "https://docker.m.daocloud.io"
     "https://docker.nju.edu.cn"
 )

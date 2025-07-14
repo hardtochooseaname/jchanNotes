@@ -118,3 +118,21 @@ docker run -d -p 8080:80 -v mydata:/data --name web nginx
 | **`--entrypoint`** | 覆盖默认入口命令 | `docker run --entrypoint=/bin/bash app` |
 | **`-v`** (镜像卷)  |  挂载镜像中的卷  |        `docker run -v /data app`        |
 |    **`--pull`**    | 强制拉取最新镜像 |    `docker run --pull=always nginx`     |
+
+
+
+# docker实战
+
+### 镜像打包与加载
+
+```sh
+# 在源机器执行
+docker save -o my-app.tar my-app:v1
+scp my-app.tar ubuntu@192.168.1.100:/home/ubuntu/
+
+# 在目标机器执行
+ssh ubuntu@192.168.1.100
+docker load -i /home/ubuntu/my-app.tar
+docker run -d --name app my-app:v1
+```
+

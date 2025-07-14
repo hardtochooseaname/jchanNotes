@@ -42,11 +42,9 @@ poetry show
 poetry show <pkg-name>
 ```
 
-
-
 #### 安装依赖
 
-- 根据 `pyproject.toml` 文件中的配置，安装所有所需的依赖
+- 根据 `pyproject.toml` 文件中的配置，安装所有所需的依赖（一般git clone的项目，就需要这样**初始化虚拟环境**以及安装项目依赖）
 
 ```bash
 poetry install
