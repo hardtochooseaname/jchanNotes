@@ -8,8 +8,18 @@
 
 1. **创建环境：**
 
+   > 创建的环境与目录无关，环境激活过后，不管当前工作目录在哪，都会把激活的那个环境当作默认的python环境
+
    ```bash
+   # -n 名称模式（默认方式，方便环境复用）
    conda create -n myenv python=3.9
+   
+   # -p 路径模式（方便环境部署或分享）
+   conda create -p myenv python=3.9
+   
+   # 然后在环境内配置pip镜像源
+   pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
    ```
 
    - `-n myenv`：指定环境名称为 `myenv`
